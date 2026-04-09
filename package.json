@@ -1,0 +1,16 @@
+{
+  "name": "svelteai-workspace",
+  "private": true,
+  "workspaces": [
+    "svelteAI",
+    "svelteAI-demo"
+  ],
+  "scripts": {
+    "dev:lib": "yarn workspace svelteai dev",
+    "dev:demo": "yarn workspace svelteai-demo dev",
+    "build:lib": "yarn workspace svelteai build",
+    "build:demo": "yarn workspace svelteai-demo build",
+    "dev": "yarn dev:demo",
+    "build": "yarn build:lib && yarn build:demo"
+  }
+}
