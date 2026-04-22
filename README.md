@@ -1,110 +1,209 @@
-# SvelteAI Workspace
+# SvelteAI
 
-This is a monorepo workspace containing:
-- **svelteAI**: A Svelte library for AI components
-- **svelteAI-demo**: A SvelteKit demo application showcasing the library
+A developer-friendly library for building AI-integrated Svelte 5 web apps. Annotate your components with `@ai` decorators — the library handles registration, context formatting, and tool generation for your AI agent.
 
-## Structure
+## Why
 
-```
-svelteAI/                 # The library
-├── src/lib/             # Library source code
-│   ├── index.ts         # Main export file
-│   └── TestComponent.svelte
-└── package.json
+Agents can browse the web autonomously, but deep app integration gives you:
 
-svelteAI-demo/           # The demo app
-├── src/routes/          # Demo pages
-└── package.json
-
-package.json             # Workspace root configuration
-```
-
-## Setup
-
-This workspace uses Yarn workspaces to link the library and demo together. The demo app uses the library as a local dependency with HMR (Hot Module Replacement) support.
-
-### Installation
-
-```bash
-yarn install
-```
-
-This will install all dependencies for both projects and link them together.
-
-## Development
-
-### Run the demo app (recommended)
-
-```bash
-yarn dev
-# or
-yarn dev:demo
-```
-
-This starts the demo app at `http://localhost:5173` with HMR enabled. Changes to the library source will automatically reload in the demo.
-
-### Run the library dev server
-
-```bash
-yarn dev:lib
-```
-
-### Build
-
-Build the library:
-```bash
-yarn build:lib
-```
-
-Build the demo:
-```bash
-yarn build:demo
-```
-
-Build both:
-```bash
-yarn build
-```
+- **Controllability** — expose only what you choose; no agent touching credit card data or destructive actions without validation
+- **Accuracy at lower cost** — one tool call can trigger a complex, pre-validated action instead of fragile DOM manipulation
+- **Better UX** — the model reads live reactive state, not a stale screenshot
 
 ## How it works
 
-### Workspace Configuration
+SvelteAI runs a **Svelte preprocessor** (for `.svelte` files) and a **Vite plugin** (for `.svelte.ts` shared state). Both scan for `@ai` and `@component` decorator annotations and emit `$effect` registration blocks that wire your reactive state and functions into a live registry tree.
 
-The root [`package.json`](package.json:1) defines the workspace:
-- Links both `svelteAI` and `svelteAI-demo` as workspaces
-- Provides convenient scripts to run both projects
+At runtime, a [`SvelteAI`](svelteAI/src/lib/facade/SvelteAI.ts) facade reads the registry and exposes:
 
-### Library as Dependency
+- `getContext()` — a formatted string for LLM system prompt injection
+- `getState()` / `getSnapshot()` — flat map or nested tree of current values
+- `setState()` / `callAction()` — write back to reactive state or invoke annotated functions
+- `tools` — ready-made [Vercel AI SDK](https://sdk.vercel.ai) `tool()` definitions (`callAction`, `setState`, `lookupComponent`)
 
-The demo app includes the library in its [`dependencies`](svelteAI-demo/package.json:18):
-```json
-"dependencies": {
-  "svelteai": "*"
+The model always sees live values — `getContext()` is called on every turn, not cached.
+
+## Annotation syntax
+
+### Component description
+
+```svelte
+<!-- ThermostatWidget.svelte -->
+<script module>
+  @component({ description: 'A thermostat control widget for a single room.' })
+</script>
+```
+
+### Reactive state and actions
+
+```svelte
+<script lang="ts">
+  let { room }: { room: Room } = $props()
+
+  @ai({ access: 'r', description: 'The name of the room this widget controls.' })
+  let room_name = $derived(room.name)
+
+  @ai({ access: 'rw', description: 'Current target temperature in Celsius. Agent may set between 16 and 30.' })
+  let temperature = $state(room.defaultTemp)
+
+  @ai({ description: 'Resets the temperature to the room default.' })
+  function resetTemperature() {
+    temperature = room.defaultTemp
+  }
+</script>
+```
+
+### Shared state (`.svelte.ts`)
+
+```ts
+// energy.svelte.ts
+@ai({ access: 'r', description: 'Current total energy consumption in watts.' })
+export let total_watts = $state(1240)
+```
+
+## What the model sees
+
+`svelteAI.getContext()` produces a formatted block injected into the system prompt:
+
+```
+App state:
+
+[ThermostatWidget:a3f2]
+  A thermostat control widget for a single room.
+  room_name (r): 'bedroom'
+  temperature (rw): 22
+  resetTemperature() — Resets the temperature to the room default.
+
+[ThermostatWidget:b7e0]
+  A thermostat control widget for a single room.
+  room_name (r): 'living room'
+  temperature (rw): 19
+
+Global state:
+  total_watts (r): 1240
+```
+
+## Agent wiring
+
+```ts
+// svelteai.ts
+import { SvelteAI } from 'svelteai'
+export const svelteAI = new SvelteAI()
+```
+
+```ts
+// agent.ts
+import { ToolLoopAgent, tool } from 'ai'
+import { openai } from '@ai-sdk/openai'
+import { svelteAI } from './svelteai'
+import { goto } from '$app/navigation'
+import { z } from 'zod'
+
+export const agent = new ToolLoopAgent({
+  model: openai('gpt-4o'),
+  instructions: () => `
+You are a smart home assistant.
+
+Current app state:
+${svelteAI.getContext()}
+  `.trim(),
+  tools: {
+    navigate: tool({
+      description: 'Navigate to a different page.',
+      parameters: z.object({ path: z.string() }),
+      execute: async ({ path }) => { await goto(path); return { ok: true } }
+    }),
+    ...svelteAI.tools.callAction,
+    ...svelteAI.tools.setState,
+  }
+})
+```
+
+## Build setup
+
+Add to [`svelte.config.js`](svelteAI-demo/svelte.config.ts):
+
+```js
+import { svelteAIPreprocess } from 'svelteai'
+
+export default {
+  preprocess: [svelteAIPreprocess()]
 }
 ```
 
-The `*` version means it will use the local workspace version.
+Add to [`vite.config.ts`](svelteAI-demo/vite.config.ts):
 
-### HMR Support
+```ts
+import { svelteAIVitePlugin } from 'svelteai'
 
-The demo's [`vite.config.ts`](svelteAI-demo/vite.config.ts:1) is configured for HMR:
-- `resolve.alias` points `svelteai` to the library's source code (`../svelteAI/src/lib`)
-- `server.fs.allow` permits Vite to serve files from the parent directory
-- This enables instant updates when editing library components
+export default defineConfig({
+  plugins: [sveltekit(), svelteAIVitePlugin()]
+})
+```
 
-## Adding Library Components
+---
 
-1. Create your component in `svelteAI/src/lib/`
-2. Export it from `svelteAI/src/lib/index.ts`
-3. Import and use it in the demo: `import { YourComponent } from 'svelteai'`
+## Repo structure
 
-## Publishing
+```
+svelteAI/                        # The library (npm: svelteai)
+├── src/lib/
+│   ├── index.ts                 # Public API re-exports
+│   ├── registry/
+│   │   ├── types.ts             # All interfaces: AIEntry, AIAction, AINode, AISnapshot, …
+│   │   ├── AIRegistry.ts        # Root registry — component type catalogue + tree root
+│   │   ├── AINode.ts            # Tree node — entries, actions, children, lifecycle
+│   │   └── context.ts           # AI_REGISTRY_KEY + getAIContext() Svelte context helper
+│   ├── facade/
+│   │   ├── SvelteAI.ts          # User-facing facade over the registry
+│   │   └── tools.ts             # Vercel AI SDK tool() definitions
+│   ├── preprocessor/
+│   │   ├── index.ts             # svelteAIPreprocess() — Svelte preprocessor entry point
+│   │   ├── vite.ts              # svelteAIVitePlugin() — Vite plugin entry point
+│   │   ├── transform.ts         # Pure transform(source, filename): string
+│   │   ├── parse.ts             # Regex-based decorator + declaration extractor
+│   │   └── emit.ts              # Code generation: registration call strings
+│   └── runtime/
+│       └── globalRegistry.ts    # Module-level AIRegistry singleton
 
-When ready to publish the library:
+svelteAI-demo/                   # SvelteKit demo app
+└── src/routes/demo/full-context/
+    ├── +page.svelte             # Two-panel layout: live demo + inline dev docs
+    ├── ThermostatWidget.svelte  # @ai-annotated component
+    ├── ChatPanel.svelte         # Chat UI
+    ├── energy.svelte.ts         # @ai-annotated shared state
+    ├── agent.ts                 # ToolLoopAgent wiring
+    └── svelteai.ts              # SvelteAI instance export
+```
 
-1. Build the library: `yarn build:lib`
-2. Navigate to the library: `cd svelteAI`
-3. Publish: `npm publish` or `yarn publish`
+## Workspace setup
 
-The built library will be in the `dist/` folder (configured in [`package.json`](svelteAI/package.json:1)).
+This is a Yarn workspaces monorepo. The demo app resolves `svelteai` directly from source via a Vite alias — no build step needed during development.
+
+```bash
+yarn install
+yarn dev          # starts svelteAI-demo at http://localhost:5173
+```
+
+| Script | Action |
+|---|---|
+| `yarn dev` | Run the demo app with HMR |
+| `yarn dev:lib` | Run the library dev server |
+| `yarn build:lib` | Build the library to `svelteAI/dist/` |
+| `yarn build:demo` | Build the demo app |
+| `yarn build` | Build both |
+
+## Peer dependencies
+
+| Package | Version |
+|---|---|
+| `svelte` | `^5.0.0` |
+| `ai` (Vercel AI SDK) | `^6.0.0` |
+| `zod` | `^4.0.0` |
+
+## Design docs
+
+- [`Design/general_aim.md`](Design/general_aim.md) — goals and motivation
+- [`Implementation/plan.md`](Implementation/plan.md) — full implementation plan, module architecture, transform engine spec
+- [`Docs/how-to-full-context.md`](Docs/how-to-full-context.md) — full-context integration pattern with Vercel AI SDK
+- [`Docs/how-to-context-digger.md`](Docs/how-to-context-digger.md) — lazy-loading pattern for larger apps
