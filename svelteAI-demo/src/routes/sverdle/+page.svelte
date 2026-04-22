@@ -1,412 +1,360 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
-	import { resolve } from '$app/paths';
-	import { confetti } from '@neoconfetti/svelte';
-	import { MediaQuery } from 'svelte/reactivity';
+	import type { PageProps } from './$types'
+	import SverdelGame from './SverdelGame.svelte'
+	import SverdelChat from './SverdelChat.svelte'
+	import { createChat } from './agent.js'
 
-	import type { PageProps } from './$types';
+	let { data }: PageProps = $props()
 
-	let { data }: PageProps = $props();
+	let apiKeyInput = $state('')
+	let activeKey = $state('')
 
-	/** Whether the user prefers reduced motion */
-	const reducedMotion = new MediaQuery('(prefers-reduced-motion: reduce)');
+	// svelte-ignore state_referenced_locally
+	let chat = $state<ReturnType<typeof createChat> | null>(null)
 
-	let shake = $state(false);
-
-	/** Whether or not the user has won */
-	let won = $derived(data.answers.at(-1) === 'xxxxx');
-
-	/** The index of the current guess */
-	let i = $derived(won ? -1 : data.answers.length);
-
-	/** The current guess */
-	let currentGuess = $derived(data.guesses[i] || '');
-
-	/** Whether the current guess can be submitted */
-	let submittable = $derived(currentGuess.length === 5);
-
-	const { classnames, description } = $derived.by(() => {
-		/**
-		 * A map of classnames for all letters that have been guessed,
-		 * used for styling the keyboard
-		 */
-		let classnames: Record<string, 'exact' | 'close' | 'missing'> = {};
-		/**
-		 * A map of descriptions for all letters that have been guessed,
-		 * used for adding text for assistive technology (e.g. screen readers)
-		 */
-		let description: Record<string, string> = {};
-		data.answers.forEach((answer, i) => {
-			const guess = data.guesses[i];
-			for (let i = 0; i < 5; i += 1) {
-				const letter = guess[i];
-				if (answer[i] === 'x') {
-					classnames[letter] = 'exact';
-					description[letter] = 'correct';
-				} else if (!classnames[letter]) {
-					classnames[letter] = answer[i] === 'c' ? 'close' : 'missing';
-					description[letter] = answer[i] === 'c' ? 'present' : 'absent';
-				}
-			}
-		});
-		return { classnames, description };
-	});
-
-	/**
-	 * Modify the game state without making a trip to the server,
-	 * if client-side JavaScript is enabled
-	 */
-	function update(event: MouseEvent) {
-		event.preventDefault();
-		const key = (event.target as HTMLButtonElement).getAttribute(
-			'data-key'
-		);
-
-		if (key === 'backspace') {
-			currentGuess = currentGuess.slice(0, -1);
-			shake = false;
-		} else if (currentGuess.length < 5) {
-			currentGuess += key;
-		}
+	function applyKey() {
+		const k = apiKeyInput.trim()
+		if (!k) return
+		activeKey = k
+		chat = createChat(k)
 	}
 
-	/**
-	 * Trigger form logic in response to a keydown event, so that
-	 * desktop users can use the keyboard to play the game
-	 */
-	function keydown(event: KeyboardEvent) {
-		if (event.metaKey) return;
-
-		if (event.key === 'Enter' && !submittable) return;
-
-		document
-			.querySelector(`[data-key="${event.key}" i]`)
-			?.dispatchEvent(new MouseEvent('click', { cancelable: true, bubbles: true }));
+	function handleKeyFormSubmit(e: SubmitEvent) {
+		e.preventDefault()
+		applyKey()
 	}
 </script>
-
-<svelte:window onkeydown={keydown} />
 
 <svelte:head>
 	<title>Sverdle</title>
 	<meta name="description" content="A Wordle clone written in SvelteKit" />
 </svelte:head>
 
-<h1 class="visually-hidden">Sverdle</h1>
-
-<form
-	method="post"
-	action="?/enter"
-	use:enhance={() => {
-		// prevent default callback from resetting the form
-		return ({ result, update }) => {
-			shake = result.type === 'failure';
-			update({ reset: false });
-		};
-	}}
->
-	<a class="how-to-play" href={resolve('/sverdle/how-to-play')}>How to play</a>
-
-	<div class="grid" class:playing={!won} class:shake onanimationend={() => (shake = false)}>
-		{#each Array.from(Array(6).keys()) as row (row)}
-			{@const current = row === i}
-			<h2 class="visually-hidden">Row {row + 1}</h2>
-			<div class="row" class:current>
-				{#each Array.from(Array(5).keys()) as column (column)}
-					{@const guess = current ? currentGuess : data.guesses[row]}
-					{@const answer = data.answers[row]?.[column]}
-					{@const value = guess?.[column] ?? ''}
-					{@const selected = current && column === guess.length}
-					{@const exact = answer === 'x'}
-					{@const close = answer === 'c'}
-					{@const missing = answer === '_'}
-					<div class="letter" class:exact class:close class:missing class:selected>
-						{value}
-						<span class="visually-hidden">
-							{#if exact}
-								(correct)
-							{:else if close}
-								(present)
-							{:else if missing}
-								(absent)
-							{:else}
-								empty
-							{/if}
-						</span>
-						<input name="guess" disabled={!current} type="hidden" {value} />
-					</div>
-				{/each}
-			</div>
-		{/each}
+<div class="page-layout">
+	<div class="game-col">
+		<SverdelGame {data} />
 	</div>
 
-	<div class="controls">
-		{#if won || data.answers.length >= 6}
-			{#if !won && data.answer}
-				<p>the answer was "{data.answer}"</p>
+	<aside class="chat-col">
+		<div class="chat-header">
+			<h2>AI Assistant</h2>
+			<details class="how-it-works">
+				<summary>How it works</summary>
+				<div class="how-body">
+					<p>
+						This demo shows how to make an existing Svelte component AI-aware using
+						<strong>svelteAI</strong> decorators — no rewrite needed.
+					</p>
+
+					<h3>1. Register the component</h3>
+					<p>Add a <code>&lt;script module&gt;</code> block with <code>@component</code>:</p>
+					<pre><code>&lt;script module&gt;
+	 @component(&#123; description: 'The active Sverdle game board.' &#125;)
+&lt;/script&gt;</code></pre>
+
+					<h3>2. Expose state to the agent</h3>
+					<p>Annotate derived values with <code>@ai</code> — the agent sees them as read-only context:</p>
+					<pre><code>@ai(&#123; access: 'r', description: 'Summary of all guesses so far.' &#125;)
+let guesses_summary = $derived(
+	 data.answers.map((answer, idx) =&gt;
+	   (&#123; word: data.guesses[idx], result: answer &#125;))
+)
+
+@ai(&#123; access: 'r', description: 'Known letter statuses.' &#125;)
+let letter_statuses = $derived(classnames)</code></pre>
+
+					<h3>3. Expose an action</h3>
+					<p>Annotate a function with <code>@ai</code> — the agent can call it as a tool:</p>
+					<pre><code>@ai(&#123; description: 'Enters a 5-letter word and submits it.' &#125;)
+async function enterGuess(&#123; word &#125;: &#123; word: string &#125;) &#123;
+	 // types letters via DOM clicks, then submits
+	 ...
+	 return &#123; ok: true, word &#125;
+&#125;</code></pre>
+
+					<h3>4. Wire up the agent</h3>
+					<p>
+						In <code>agent.ts</code>, inject the live game state into the system prompt on every
+						turn via <code>svelteAI.getContext()</code>. The agent can then call
+						<code>enterGuess</code> as a tool when asked to play a word.
+					</p>
+				</div>
+			</details>
+			{#if !activeKey}
+				<form class="key-form" onsubmit={handleKeyFormSubmit}>
+					<label for="api-key" class="key-label">OpenAI API key</label>
+					<div class="key-row">
+						<input
+							id="api-key"
+							type="password"
+							bind:value={apiKeyInput}
+							placeholder="sk-..."
+							autocomplete="off"
+							class="key-input"
+						/>
+						<button type="submit" class="key-btn" disabled={!apiKeyInput.trim()}>
+							Start
+						</button>
+					</div>
+					<p class="key-hint">
+						Your key stays in this tab and goes directly to OpenAI.
+					</p>
+				</form>
+			{:else}
+				<div class="key-active-row">
+					<span class="key-active-label">🔑 Key set</span>
+					<button
+						class="key-change-btn"
+						onclick={() => { activeKey = ''; chat = null; apiKeyInput = '' }}
+					>Change</button>
+				</div>
 			{/if}
-			<button data-key="enter" class="restart selected" formaction="?/restart">
-				{won ? 'you won :)' : `game over :(`} play again?
-			</button>
-		{:else}
-			<div class="keyboard">
-				<button data-key="enter" class:selected={submittable} disabled={!submittable}>enter</button>
+		</div>
 
-				<button
-					onclick={update}
-					data-key="backspace"
-					formaction="?/update"
-					name="key"
-					value="backspace"
-				>
-					back
-				</button>
-
-				{#each ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'] as row (row)}
-					<div class="row">
-						{#each row as letter, index (index)}
-							<button
-								onclick={update}
-								data-key={letter}
-								class={classnames[letter]}
-								disabled={submittable}
-								formaction="?/update"
-								name="key"
-								value={letter}
-								aria-label="{letter} {description[letter] || ''}"
-							>
-								{letter}
-							</button>
-						{/each}
-					</div>
-				{/each}
-			</div>
-		{/if}
-	</div>
-</form>
-
-{#if won}
-	<div
-		style="position: absolute; left: 50%; top: 30%"
-		use:confetti={{
-			particleCount: reducedMotion.current ? 0 : undefined,
-			force: 0.7,
-			stageWidth: window.innerWidth,
-			stageHeight: window.innerHeight,
-			colors: ['#ff3e00', '#40b3ff', '#676778']
-		}}
-	></div>
-{/if}
+		<div class="chat-container" class:chat-disabled={!chat}>
+			{#if chat}
+				<SverdelChat {chat} />
+			{:else}
+				<div class="chat-placeholder">
+					Enter your OpenAI API key above to get hints, word suggestions, or let the AI play a guess.
+				</div>
+			{/if}
+		</div>
+	</aside>
+</div>
 
 <style>
-	form {
-		width: 100%;
-		height: 100%;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 1rem;
-		flex: 1;
-	}
-
-	.how-to-play {
-		color: var(--color-text);
-	}
-
-	.how-to-play::before {
-		content: 'i';
-		display: inline-block;
-		font-size: 0.8em;
-		font-weight: 900;
-		width: 1em;
-		height: 1em;
-		padding: 0.2em;
-		line-height: 1;
-		border: 1.5px solid var(--color-text);
-		border-radius: 50%;
-		text-align: center;
-		margin: 0 0.5em 0 0;
-		position: relative;
-		top: -0.05em;
-	}
-
-	.grid {
-		--width: min(100vw, 40vh, 380px);
-		max-width: var(--width);
-		align-self: center;
-		justify-self: center;
-		width: 100%;
-		height: 100%;
-		display: flex;
-		flex-direction: column;
-		justify-content: flex-start;
-	}
-
-	.grid .row {
+	.page-layout {
 		display: grid;
-		grid-template-columns: repeat(5, 1fr);
-		grid-gap: 0.2rem;
-		margin: 0 0 0.2rem 0;
+		grid-template-columns: 1fr 340px;
+		gap: 1.5rem;
+		width: 100%;
+		height: 100%;
+		min-height: 0;
+		align-items: stretch;
 	}
 
-	@media (prefers-reduced-motion: no-preference) {
-		.grid.shake .row.current {
-			animation: wiggle 0.5s;
+	@media (max-width: 800px) {
+		.page-layout {
+			grid-template-columns: 1fr;
 		}
 	}
 
-	.grid.playing .row.current {
-		filter: drop-shadow(3px 3px 10px var(--color-bg-0));
+	.game-col {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		min-height: 0;
 	}
 
-	.letter {
-		aspect-ratio: 1;
-		width: 100%;
+	.chat-col {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		max-height: calc(100vh - 8rem);
+		min-height: 0;
+	}
+
+	.chat-header {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	h2 {
+		margin: 0;
+		font-size: 1rem;
+		font-weight: 600;
+		color: #1e293b;
+		border-bottom: 1px solid #e2e8f0;
+		padding-bottom: 0.4rem;
+	}
+
+	.how-it-works {
+		border: 1px solid #e2e8f0;
+		border-radius: 0.5rem;
+		background: #f8fafc;
+		font-size: 0.8rem;
+	}
+
+	.how-it-works summary {
+		cursor: pointer;
+		padding: 0.5rem 0.75rem;
+		font-weight: 600;
+		color: #475569;
+		user-select: none;
+		list-style: none;
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.how-it-works summary::before {
+		content: '▶';
+		font-size: 0.6rem;
+		transition: transform 0.15s;
+		color: #94a3b8;
+	}
+
+	.how-it-works[open] summary::before {
+		transform: rotate(90deg);
+	}
+
+	.how-body {
+		padding: 0 0.75rem 0.75rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+		overflow-y: auto;
+		max-height: 60vh;
+	}
+
+	.how-body p {
+		margin: 0;
+		color: #475569;
+		line-height: 1.5;
+	}
+
+	.how-body h3 {
+		margin: 0.5rem 0 0;
+		font-size: 0.78rem;
+		font-weight: 700;
+		color: #334155;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.how-body pre {
+		margin: 0;
+		background: #1e293b;
+		color: #e2e8f0;
+		border-radius: 0.375rem;
+		padding: 0.6rem 0.75rem;
+		font-size: 0.72rem;
+		line-height: 1.5;
+		overflow-x: auto;
+		white-space: pre;
+	}
+
+	.how-body code {
+		font-family: 'Fira Mono', monospace;
+	}
+
+	.chat-container {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+
+	.chat-disabled {
+		opacity: 0.5;
+		pointer-events: none;
+	}
+
+	.chat-placeholder {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		text-align: center;
-		box-sizing: border-box;
-		text-transform: lowercase;
-		border: none;
-		font-size: calc(0.08 * var(--width));
-		border-radius: 2px;
+		height: 100%;
+		min-height: 200px;
+		color: #94a3b8;
+		font-size: 0.875rem;
+		border: 1px solid #e2e8f0;
+		border-radius: 0.75rem;
 		background: white;
-		margin: 0;
-		color: rgba(0, 0, 0, 0.7);
-	}
-
-	.letter.missing {
-		background: rgba(255, 255, 255, 0.5);
-		color: rgba(0, 0, 0, 0.5);
-	}
-
-	.letter.exact {
-		background: var(--color-theme-2);
-		color: white;
-	}
-
-	.letter.close {
-		border: 2px solid var(--color-theme-2);
-	}
-
-	.selected {
-		outline: 2px solid var(--color-theme-1);
-	}
-
-	.controls {
 		text-align: center;
-		justify-content: center;
-		height: min(18vh, 10rem);
+		padding: 1.5rem;
+		line-height: 1.5;
 	}
 
-	.keyboard {
-		--gap: 0.2rem;
-		position: relative;
+	.key-form {
 		display: flex;
 		flex-direction: column;
-		gap: var(--gap);
-		height: 100%;
+		gap: 0.4rem;
+		background: #f8fafc;
+		border: 1px solid #e2e8f0;
+		border-radius: 0.5rem;
+		padding: 0.75rem;
 	}
 
-	.keyboard .row {
+	.key-label {
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: #334155;
+	}
+
+	.key-row {
 		display: flex;
-		justify-content: center;
-		gap: 0.2rem;
-		flex: 1;
+		gap: 0.5rem;
 	}
 
-	.keyboard button,
-	.keyboard button:disabled {
-		--size: min(8vw, 4vh, 40px);
-		background-color: white;
-		color: black;
-		width: var(--size);
+	.key-input {
+		flex: 1;
+		padding: 0.4rem 0.6rem;
+		border: 1px solid #cbd5e1;
+		border-radius: 0.375rem;
+		font-size: 0.875rem;
+		font-family: 'Fira Mono', monospace;
+		outline: none;
+	}
+
+	.key-input:focus {
+		border-color: #ff3e00;
+		box-shadow: 0 0 0 2px rgba(255, 62, 0, 0.15);
+	}
+
+	.key-btn {
+		padding: 0.4rem 0.9rem;
+		background: #ff3e00;
+		color: white;
 		border: none;
-		border-radius: 2px;
-		font-size: calc(var(--size) * 0.5);
+		border-radius: 0.375rem;
+		font-size: 0.875rem;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+
+	.key-btn:hover:not(:disabled) {
+		background: #e03600;
+	}
+
+	.key-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.key-hint {
+		font-size: 0.75rem;
+		color: #94a3b8;
 		margin: 0;
 	}
 
-	.keyboard button.exact {
-		background: var(--color-theme-2);
-		color: white;
+	.key-active-row {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		font-size: 0.8rem;
+		color: #475569;
 	}
 
-	.keyboard button.missing {
-		opacity: 0.5;
+	.key-active-label {
+		font-weight: 600;
+		color: #16a34a;
 	}
 
-	.keyboard button.close {
-		border: 2px solid var(--color-theme-2);
+	.key-change-btn {
+		background: none;
+		border: 1px solid #cbd5e1;
+		border-radius: 0.375rem;
+		padding: 0.15rem 0.5rem;
+		font-size: 0.75rem;
+		cursor: pointer;
+		color: #64748b;
 	}
 
-	.keyboard button:focus {
-		background: var(--color-theme-1);
-		color: white;
-		outline: none;
-	}
-
-	.keyboard button[data-key='enter'],
-	.keyboard button[data-key='backspace'] {
-		position: absolute;
-		bottom: 0;
-		width: calc(1.5 * var(--size));
-		height: calc(1 / 3 * (100% - 2 * var(--gap)));
-		text-transform: uppercase;
-		font-size: calc(0.3 * var(--size));
-		padding-top: calc(0.15 * var(--size));
-	}
-
-	.keyboard button[data-key='enter'] {
-		right: calc(50% + 3.5 * var(--size) + 0.8rem);
-	}
-
-	.keyboard button[data-key='backspace'] {
-		left: calc(50% + 3.5 * var(--size) + 0.8rem);
-	}
-
-	.keyboard button[data-key='enter']:disabled {
-		opacity: 0.5;
-	}
-
-	.restart {
-		width: 100%;
-		padding: 1rem;
-		background: rgba(255, 255, 255, 0.5);
-		border-radius: 2px;
-		border: none;
-	}
-
-	.restart:focus,
-	.restart:hover {
-		background: var(--color-theme-1);
-		color: white;
-		outline: none;
-	}
-
-	@keyframes wiggle {
-		0% {
-			transform: translateX(0);
-		}
-		10% {
-			transform: translateX(-2px);
-		}
-		30% {
-			transform: translateX(4px);
-		}
-		50% {
-			transform: translateX(-6px);
-		}
-		70% {
-			transform: translateX(+4px);
-		}
-		90% {
-			transform: translateX(-2px);
-		}
-		100% {
-			transform: translateX(0);
-		}
+	.key-change-btn:hover {
+		background: #f1f5f9;
 	}
 </style>

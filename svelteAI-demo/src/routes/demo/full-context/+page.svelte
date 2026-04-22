@@ -5,14 +5,33 @@
 	import { createChat } from './agent.js'
 	import { total_watts, peak_today } from './energy.svelte.js'
 	import { svelteAI } from './svelteai.js'
+	import DocAnnotate from './doc-annotate.md'
+	import DocAgent from './doc-agent.md'
 
 	const rooms = [
 		{ name: 'bedroom', defaultTemp: 20 },
 		{ name: 'living room', defaultTemp: 22 },
 	]
 
-	// Create the chat instance once — agent reads svelteAI.getContext() on each turn
-	const chat = createChat()
+	// API key — always supplied by the user at runtime
+	let apiKeyInput = $state('')
+	let activeKey = $state('')
+
+	// Chat is null until a key is confirmed
+	// svelte-ignore state_referenced_locally
+	let chat = $state<ReturnType<typeof createChat> | null>(null)
+
+	function applyKey() {
+		const k = apiKeyInput.trim()
+		if (!k) return
+		activeKey = k
+		chat = createChat(k)
+	}
+
+	function handleKeyFormSubmit(e: SubmitEvent) {
+		e.preventDefault()
+		applyKey()
+	}
 
 	// Live context snapshot — auto-updates reactively; refresh button forces a re-read
 	let contextSnapshot = $derived(svelteAI.getContext())
@@ -38,44 +57,6 @@
 		}
 	})
 
-	// Code examples stored as strings to avoid Svelte parser treating <script> as a tag.
-	// The decorator prefixes are split with string concatenation to prevent the svelteAI
-	// preprocessor regex from matching them inside this string literal.
-	const AT = '@'
-	const codeAnnotate = [
-		'<!-- ThermostatWidget.svelte -->',
-		'<' + 'script module>',
-		`  ${AT}component({ description: 'A thermostat control widget.' })`,
-		'</' + 'script>',
-		'',
-		'<' + 'script lang="ts">',
-		`  ${AT}ai({ access: 'r', description: 'Room name.' })`,
-		'  let room_name = $derived(room.name)',
-		'',
-		`  ${AT}ai({ access: 'rw', description: 'Target temperature.' })`,
-		'  let temperature = $state(room.defaultTemp)',
-		'',
-		`  ${AT}ai({ description: 'Resets to default.' })`,
-		'  function resetTemperature() { ... }',
-		'</' + 'script>',
-	].join('\n')
-
-	const codeAgent = [
-		'const agent = new ToolLoopAgent({',
-		"  model: openai('gpt-4o-mini'),",
-		"  instructions: 'You are a smart home assistant.',",
-		'  tools: {',
-		'    ...svelteAI.tools.callAction,',
-		'    ...svelteAI.tools.setState,',
-		'  },',
-		'  prepareStep: async ({ messages }) => ({',
-		'    messages: [',
-		"      { role: 'system', content: svelteAI.getContext() },",
-		"      ...messages.filter(m => m.role !== 'system')",
-		'    ]',
-		'  })',
-		'})',
-	].join('\n')
 </script>
 
 <div class="page">
@@ -103,9 +84,44 @@
 				{/each}
 			</div>
 
-			<div class="chat-container">
-				<ChatPanel {chat} />
-			</div>
+			<!-- API key input -->
+				{#if !activeKey}
+					<form class="key-form" onsubmit={handleKeyFormSubmit}>
+						<label for="api-key" class="key-label">OpenAI API key</label>
+						<div class="key-row">
+							<input
+								id="api-key"
+								type="password"
+								bind:value={apiKeyInput}
+								placeholder="sk-..."
+								autocomplete="off"
+								class="key-input"
+							/>
+							<button type="submit" class="key-btn" disabled={!apiKeyInput.trim()}>
+								Start
+							</button>
+						</div>
+						<p class="key-hint">
+							Your key stays in this browser tab and goes directly to OpenAI — it is never sent to any other server.
+						</p>
+					</form>
+				{:else}
+					<div class="key-active-row">
+						<span class="key-active-label">🔑 Key set</span>
+						<button
+							class="key-change-btn"
+							onclick={() => { activeKey = ''; chat = null; apiKeyInput = '' }}
+						>Change</button>
+					</div>
+				{/if}
+	
+				<div class="chat-container" class:chat-disabled={!chat}>
+					{#if chat}
+						<ChatPanel {chat} />
+					{:else}
+						<div class="chat-placeholder">Enter your OpenAI API key above to start chatting.</div>
+					{/if}
+				</div>
 		</section>
 
 		<!-- Right panel: developer docs -->
@@ -113,21 +129,11 @@
 			<h2>Developer Docs</h2>
 
 			<div class="doc-section">
-				<h3>1. Annotate your components</h3>
-				<p>
-					Add <code>@ai(&#123;...&#125;)</code> decorators to reactive state and functions.
-					The preprocessor transforms them into registry registrations at build time.
-				</p>
-				<pre class="code-block"><code>{codeAnnotate}</code></pre>
+				<DocAnnotate />
 			</div>
 
 			<div class="doc-section">
-				<h3>2. Wire up the agent</h3>
-				<p>
-					Pass <code>svelteAI.getContext()</code> into the system prompt.
-					Use <code>svelteAI.tools</code> for ready-made tool definitions.
-				</p>
-				<pre class="code-block"><code>{codeAgent}</code></pre>
+				<DocAgent />
 			</div>
 
 			<div class="doc-section">
@@ -237,6 +243,114 @@
 		flex-direction: column;
 	}
 
+	.chat-disabled {
+		opacity: 0.5;
+		pointer-events: none;
+	}
+
+	.chat-placeholder {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		height: 100%;
+		color: #94a3b8;
+		font-size: 0.875rem;
+		border: 1px solid #e2e8f0;
+		border-radius: 0.75rem;
+		background: white;
+		text-align: center;
+		padding: 1rem;
+	}
+
+	.key-form {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+		background: #f8fafc;
+		border: 1px solid #e2e8f0;
+		border-radius: 0.5rem;
+		padding: 0.75rem;
+	}
+
+	.key-label {
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: #334155;
+	}
+
+	.key-row {
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.key-input {
+		flex: 1;
+		padding: 0.4rem 0.6rem;
+		border: 1px solid #cbd5e1;
+		border-radius: 0.375rem;
+		font-size: 0.875rem;
+		font-family: 'Fira Mono', monospace;
+		outline: none;
+	}
+
+	.key-input:focus {
+		border-color: #3b82f6;
+		box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+	}
+
+	.key-btn {
+		padding: 0.4rem 0.9rem;
+		background: #3b82f6;
+		color: white;
+		border: none;
+		border-radius: 0.375rem;
+		font-size: 0.875rem;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+
+	.key-btn:hover:not(:disabled) {
+		background: #2563eb;
+	}
+
+	.key-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.key-hint {
+		font-size: 0.75rem;
+		color: #94a3b8;
+		margin: 0;
+	}
+
+	.key-active-row {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		font-size: 0.8rem;
+		color: #475569;
+	}
+
+	.key-active-label {
+		font-weight: 600;
+		color: #16a34a;
+	}
+
+	.key-change-btn {
+		background: none;
+		border: 1px solid #cbd5e1;
+		border-radius: 0.375rem;
+		padding: 0.15rem 0.5rem;
+		font-size: 0.75rem;
+		cursor: pointer;
+		color: #64748b;
+	}
+
+	.key-change-btn:hover {
+		background: #f1f5f9;
+	}
+
 	/* Docs panel */
 	.doc-section {
 		display: flex;
@@ -266,7 +380,8 @@
 		border-radius: 0.2em;
 	}
 
-	.code-block {
+	.code-block,
+	.doc-section :global(pre) {
 		margin: 0;
 		background: #0f172a;
 		color: #e2e8f0;
@@ -277,7 +392,8 @@
 		line-height: 1.6;
 	}
 
-	.code-block code {
+	.code-block code,
+	.doc-section :global(pre code) {
 		background: none;
 		padding: 0;
 		color: inherit;
@@ -358,6 +474,44 @@
 	}
 
 	details .code-block {
+		border-radius: 0;
+		margin: 0;
+	}
+
+	.doc-section :global(details) {
+		border: 1px solid #e2e8f0;
+		border-radius: 0.5rem;
+		overflow: hidden;
+		margin-top: 0.25rem;
+	}
+
+	.doc-section :global(details[open] summary) {
+		border-bottom: 1px solid #e2e8f0;
+	}
+
+	.doc-section :global(summary) {
+		padding: 0.4rem 0.75rem;
+		cursor: pointer;
+		background: #f8fafc;
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: #475569;
+		user-select: none;
+		list-style: none;
+	}
+
+	.doc-section :global(summary::-webkit-details-marker) {
+		display: none;
+	}
+
+	.doc-section :global(details p) {
+		padding: 0.5rem 0.75rem 0;
+		font-size: 0.8rem;
+		color: #64748b;
+		margin: 0;
+	}
+
+	.doc-section :global(details pre) {
 		border-radius: 0;
 		margin: 0;
 	}

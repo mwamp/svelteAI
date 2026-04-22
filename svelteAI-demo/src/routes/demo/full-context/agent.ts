@@ -1,6 +1,6 @@
 import { DirectChatTransport, ToolLoopAgent, tool, stepCountIs } from 'ai'
 import { Chat } from '@ai-sdk/svelte'
-import { openai } from '@ai-sdk/openai'
+import { createOpenAI } from '@ai-sdk/openai'
 import { goto } from '$app/navigation'
 import { z } from 'zod'
 import { svelteAI } from './svelteai.js'
@@ -11,13 +11,12 @@ import { svelteAI } from './svelteai.js'
  * Uses DirectChatTransport + ToolLoopAgent so the agent runs entirely
  * in-process — no server route needed.
  *
- * The agent is created inside a prepareStep callback so that
- * svelteAI.getContext() is evaluated fresh on every generation step,
- * ensuring the model always sees the current state.
- *
- * Requires OPENAI_API_KEY to be set (via .env or environment).
+ * @param apiKey - OpenAI API key. Falls back to VITE_OPENAI_API_KEY env var
+ *   so local dev with a .env file still works without typing the key.
  */
-export function createChat(): Chat {
+export function createChat(apiKey: string): Chat {
+	const openai = createOpenAI({ apiKey })
+
 	const tools = {
 		navigate: tool({
 			description: 'Navigate to a different page in the app.',
@@ -36,12 +35,10 @@ export function createChat(): Chat {
 
 	const agent = new ToolLoopAgent({
 		model: openai('gpt-4o-mini'),
-		// instructions is re-evaluated via prepareStep to get fresh context
 		instructions: 'You are a smart home assistant.',
 		tools,
 		stopWhen: stepCountIs(10),
 		prepareStep: async ({ messages }) => {
-			// Inject fresh context into the first message of each step
 			return {
 				messages: [
 					{
