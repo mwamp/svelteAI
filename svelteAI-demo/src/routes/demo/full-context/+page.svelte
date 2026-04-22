@@ -33,29 +33,24 @@
 		applyKey()
 	}
 
-	// Live context snapshot — auto-updates reactively; refresh button forces a re-read
-	let contextSnapshot = $derived(svelteAI.getContext())
-	let manualSnapshot = $state<string | null>(null)
+	let showWidgets = $state(true)
+
+	// Context snapshot — polled while the details panel is open
+	let contextSnapshot = $state('')
 	let contextOpen = $state(false)
 
-	function refreshContext() {
-		manualSnapshot = svelteAI.getContext()
-	}
-
-	// When the collapsible opens, seed the manual snapshot so it's immediately visible
-	function handleToggle(e: Event) {
-		contextOpen = (e.currentTarget as HTMLDetailsElement).open
-		if (contextOpen && manualSnapshot === null) {
-			manualSnapshot = svelteAI.getContext()
-		}
-	}
-
-	// Keep the reactive snapshot in sync when the panel is open
 	$effect(() => {
-		if (contextOpen) {
-			manualSnapshot = contextSnapshot
-		}
+		if (!contextOpen) return
+		contextSnapshot = svelteAI.getContext()
+		const id = setInterval(() => {
+			contextSnapshot = svelteAI.getContext()
+		}, 1000)
+		return () => clearInterval(id)
 	})
+
+	function handleContextToggle(e: Event) {
+		contextOpen = (e.currentTarget as HTMLDetailsElement).open
+	}
 
 </script>
 
@@ -74,15 +69,24 @@
 			<h2>Live Demo</h2>
 
 			<div class="energy-bar">
-				<span>⚡ Total: <strong>{total_watts}W</strong></span>
-				<span>Peak today: <strong>{peak_today}W</strong></span>
-			</div>
-
-			<div class="widgets">
-				{#each rooms as room (room.name)}
-					<ThermostatWidget {room} />
-				{/each}
-			</div>
+					<span>⚡ Total: <strong>{total_watts}W</strong></span>
+					<span>Peak today: <strong>{peak_today}W</strong></span>
+					<button
+						class="toggle-widgets-btn"
+						onclick={() => (showWidgets = !showWidgets)}
+						aria-label={showWidgets ? 'Hide thermostat widgets' : 'Show thermostat widgets'}
+					>
+						{showWidgets ? 'Hide widgets' : 'Show widgets'}
+					</button>
+				</div>
+	
+				{#if showWidgets}
+					<div class="widgets">
+						{#each rooms as room (room.name)}
+							<ThermostatWidget {room} />
+						{/each}
+					</div>
+				{/if}
 
 			<!-- API key input -->
 				{#if !activeKey}
@@ -129,31 +133,24 @@
 			<h2>Developer Docs</h2>
 
 			<div class="doc-section">
+				<details ontoggle={handleContextToggle}>
+					<summary class="context-summary">
+						<h3>Context snapshot</h3>
+					</summary>
+					<p class="context-hint">
+						What <code>svelteAI.getContext()</code> sends to the model. Polls every second while open.
+					</p>
+					<pre class="code-block context-live"><code>{contextSnapshot || '(open to load)'}</code></pre>
+				</details>
+			</div>
+
+			<div class="doc-section">
 				<DocAnnotate />
 			</div>
 
 			<div class="doc-section">
 				<DocAgent />
 			</div>
-
-			<div class="doc-section">
-					<details ontoggle={handleToggle}>
-						<summary class="context-summary">
-							<h3>3. Live context snapshot</h3>
-							<button
-								class="refresh-btn"
-								onclick={(e) => { e.preventDefault(); refreshContext() }}
-								aria-label="Refresh context snapshot"
-								title="Refresh"
-							>↺</button>
-						</summary>
-						<p class="context-hint">
-							What <code>svelteAI.getContext()</code> sends to the model right now.
-							Auto-syncs while open; click ↺ to force a re-read.
-						</p>
-						<pre class="code-block context-live"><code>{manualSnapshot ?? '(open to load)'}</code></pre>
-					</details>
-				</div>
 		</section>
 	</div>
 </div>
@@ -235,6 +232,22 @@
 		display: flex;
 		gap: 1rem;
 		flex-wrap: wrap;
+	}
+
+	.toggle-widgets-btn {
+		margin-left: auto;
+		background: none;
+		border: 1px solid #cbd5e1;
+		border-radius: 0.375rem;
+		padding: 0.15rem 0.6rem;
+		font-size: 0.75rem;
+		cursor: pointer;
+		color: #64748b;
+	}
+
+	.toggle-widgets-btn:hover {
+		background: #e2e8f0;
+		color: #1e293b;
 	}
 
 	.chat-container {
@@ -450,22 +463,6 @@
 		transform: rotate(90deg);
 	}
 
-	.refresh-btn {
-		background: none;
-		border: 1px solid #cbd5e1;
-		border-radius: 0.375rem;
-		padding: 0.15rem 0.45rem;
-		font-size: 1rem;
-		cursor: pointer;
-		color: #64748b;
-		line-height: 1;
-		transition: background 0.1s, color 0.1s;
-	}
-
-	.refresh-btn:hover {
-		background: #e2e8f0;
-		color: #1e293b;
-	}
 
 	.context-hint {
 		padding: 0.4rem 0.75rem 0;
