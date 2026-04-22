@@ -1,4 +1,33 @@
-// Reexport your entry components here
+// Public API for the svelteAI library
 
-// Example component to verify the setup
-export { default as TestComponent } from './TestComponent.svelte';
+// Facade — user-facing class
+export { SvelteAI } from './facade/SvelteAI.ts'
+export type { SvelteAIConfig } from './facade/SvelteAI.ts'
+
+// Registry types — for consumers who want to type their own code
+export type {
+	AIEntry,
+	AIEntryInit,
+	AIAction,
+	AIActionInit,
+	AIParamSchema,
+	AIComponentType,
+	AINodeInterface,
+	AISnapshot,
+	AIComponentTypeSnapshot,
+	AINodeSnapshot,
+	AIEntrySnapshot,
+	AIActionSnapshot,
+	AIChangeEvent,
+} from './registry/types.js'
+
+// Preprocessor exports (Svelte preprocessor + Vite plugin)
+export { svelteAIPreprocess } from './preprocessor/index.js'
+export { svelteAIVitePlugin } from './preprocessor/vite.js'
+
+// Context key — needed by the preprocessor-emitted boilerplate at runtime
+export { AI_REGISTRY_KEY } from './registry/context.js'
+
+// Internal runtime — exported for preprocessor-emitted boilerplate only
+// (not intended for direct use by library consumers)
+export { __globalAIRegistry } from './runtime/globalRegistry.js'

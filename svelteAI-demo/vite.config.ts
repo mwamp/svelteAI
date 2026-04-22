@@ -2,21 +2,15 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import { sveltekit } from '@sveltejs/kit/vite';
-import { fileURLToPath } from 'url';
+import { svelteAIVitePlugin } from '../svelteAI/src/lib/preprocessor/vite.ts';
 
 export default defineConfig({
-	plugins: [tailwindcss(), sveltekit()],
+	plugins: [tailwindcss(), svelteAIVitePlugin(), sveltekit()],
 	server: {
 		port: 3005,
 		fs: {
 			// Allow serving files from the workspace root (for the library)
 			allow: ['..']
-		}
-	},
-	resolve: {
-		alias: {
-			// Resolve the library source directly for HMR during development
-			svelteai: fileURLToPath(new URL('../svelteAI/src/lib', import.meta.url))
 		}
 	},
 	test: {
