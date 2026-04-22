@@ -1,9 +1,6 @@
-<script module>
-	// @ts-nocheck
-	@component({ description: 'A thermostat control widget for a single room. The agent may read the room name, read or adjust the target temperature, and reset it to the room default.' })
-</script>
-
 <script lang="ts">
+    @component({ description: 'A thermostat control widget for a single room. The agent may read the room name, read or adjust the target temperature, and reset it to the room default.' })
+
 	interface Room {
 		name: string
 		defaultTemp: number
@@ -11,15 +8,12 @@
 
 	let { room }: { room: Room } = $props()
 
-	// @ts-ignore — @ai decorator is stripped by svelteAIPreprocess() before TS sees it
 	@ai({ access: 'r', description: 'The name of the room this widget controls.' })
 	let room_name = $derived(room.name)
 
-	// @ts-ignore
 	@ai({ access: 'rw', description: 'Current target temperature in Celsius. Agent may set between 16 and 30.' })
 	let temperature = $state(room.defaultTemp)
 
-	// @ts-ignore
 	@ai({ description: 'Resets the temperature to the room default.' })
 	function resetTemperature() {
 		temperature = room.defaultTemp
