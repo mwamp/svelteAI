@@ -92,7 +92,7 @@ export function transformScriptBlock(
 			result = result.slice(0, dec.start) + result.slice(decoratorLineEnd)
 
 			// Collect effect to append after all removals
-			if (dec.keyword === 'function') {
+			if (dec.keyword === 'function' || dec.keyword === 'async function') {
 				effectLines.unshift(emitActionEffect(dec.name!, dec.meta))
 			} else {
 				effectLines.unshift(emitStateEffect(dec.name!, dec.meta, isReadOnly))

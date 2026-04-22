@@ -16,7 +16,7 @@ export function svelteAIPreprocess(): PreprocessorGroup {
 		name: 'svelteai',
 
 		script({ content, filename, attributes }) {
-			if (!filename) return { code: content }
+			if (!filename || !filename.endsWith('.svelte')) return { code: content }
 
 			const componentName = componentNameFromFilename(filename)
 			const isModule = attributes.context === 'module' || 'module' in attributes

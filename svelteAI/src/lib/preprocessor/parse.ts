@@ -24,8 +24,8 @@ export interface ParsedDecorator {
 	type: 'ai' | 'component'
 	/** Parsed metadata key-value pairs */
 	meta: DecoratorMeta
-	/** Declaration keyword following the decorator: 'let', 'const', 'function', or null for @component */
-	keyword: 'let' | 'const' | 'function' | null
+	/** Declaration keyword following the decorator: 'let', 'const', 'function', 'async function', or null for @component */
+	keyword: 'let' | 'const' | 'function' | 'async function' | null
 	/** Name of the declared variable or function */
 	name: string | null
 	/** 'export ' if the declaration has an export modifier, otherwise '' */
@@ -138,7 +138,7 @@ export function parseMetaBody(body: string): DecoratorMeta {
  * Both patterns are multiline and handle optional whitespace.
  */
 const AI_DECORATOR_RE =
-	/@ai\s*\(\s*\{([^}]*)\}\s*\)\s*\n[ \t]*(export\s+)?(let|const|function)\s+(\w+)/g
+	/(?<!\/\/.*)@ai\s*\(\s*\{([^}]*)\}\s*\)\s*\n[ \t]*(export\s+)?(async\s+function|let|const|function)\s+(\w+)/g
 
 const COMPONENT_DECORATOR_RE = /@component\s*\(\s*\{([^}]*)\}\s*\)/g
 
@@ -170,7 +170,11 @@ export function parseDecorators(source: string): ParsedDecorator[] {
 			fullMatch,
 			type: 'ai',
 			meta,
-			keyword: keyword as 'let' | 'const' | 'function',
+			keyword: (keyword.startsWith('async') ? 'async function' : keyword) as
+				| 'let'
+				| 'const'
+				| 'function'
+				| 'async function',
 			name,
 			exportPrefix: exportKw ?? '',
 			start: match.index,
