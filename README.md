@@ -87,37 +87,158 @@ Global state:
 
 ```ts
 // svelteai.ts
+import { page } from '$app/state'
 import { SvelteAI } from 'svelteai'
-export const svelteAI = new SvelteAI()
+import { routes } from '$lib/routes.js'
+
+export const svelteAI = new SvelteAI({
+  routes,
+  getPath: () => page.url.pathname,
+})
 ```
 
 ```ts
 // agent.ts
-import { ToolLoopAgent, tool } from 'ai'
-import { openai } from '@ai-sdk/openai'
+import { ToolLoopAgent } from 'ai'
+import { createOpenAI } from '@ai-sdk/openai'
 import { svelteAI } from './svelteai'
-import { goto } from '$app/navigation'
-import { z } from 'zod'
+
+const openai = createOpenAI({ apiKey })
 
 export const agent = new ToolLoopAgent({
   model: openai('gpt-4o'),
-  instructions: () => `
-You are a smart home assistant.
-
-Current app state:
-${svelteAI.getContext()}
-  `.trim(),
   tools: {
-    navigate: tool({
-      description: 'Navigate to a different page.',
-      parameters: z.object({ path: z.string() }),
-      execute: async ({ path }) => { await goto(path); return { ok: true } }
-    }),
+    ...svelteAI.tools.lookupRoute,
+    ...svelteAI.tools.navigateByUrl,
+    ...svelteAI.tools.navigateByIndex,
     ...svelteAI.tools.callAction,
     ...svelteAI.tools.setState,
-  }
+    ...svelteAI.tools.lookupComponent,
+  },
+  prepareStep: async ({ messages }) => ({
+    messages: [
+      {
+        role: 'system',
+        content: `You are a smart home assistant.\n\n${svelteAI.getContext()}`,
+      },
+      ...messages.filter((m) => m.role !== 'system'),
+    ],
+  }),
 })
 ```
+
+## Navigation
+
+SvelteAI can give the agent awareness of the app's page structure — what pages exist, what they do, and how to navigate between them.
+
+### 1. Author route metadata
+
+Each page that should be AI-visible exports a `_routeMeta` object from its `+page.ts`:
+
+```ts
+// src/routes/sverdle/+page.ts
+export const _routeMeta = {
+  short: 'Sverdle word game',
+  long: 'A Wordle clone where the AI assistant can suggest words and enter guesses.',
+}
+```
+
+For dynamic routes, add a `params` field describing where the model should obtain each value:
+
+```ts
+// src/routes/sverdle/[word]/+page.ts
+export const _routeMeta = {
+  short: 'Sverdle round for a specific word',
+  params: {
+    word: {
+      description: 'The 5-letter word to use as the answer.',
+      example: 'crane',
+    },
+  },
+}
+```
+
+For `.md` pages (mdsvex), use YAML frontmatter:
+
+```yaml
+---
+routeMeta:
+  short: Why SvelteAI?
+  long: Explains the motivation and core concepts behind SvelteAI.
+---
+```
+
+### 2. Build the route registry
+
+Create [`src/lib/routes.ts`](svelteAI-demo/src/lib/routes.ts) in your app. The two `import.meta.glob` calls must live in the app (Vite compile-time constraint); [`buildRouteRegistry()`](svelteAI/src/lib/facade/routes.ts:66) owns all the logic:
+
+```ts
+// src/lib/routes.ts
+import { buildRouteRegistry } from 'svelteai'
+
+const tsModules = import.meta.glob('/src/routes/**/+page.ts', { eager: true })
+const mdModules = import.meta.glob('/src/routes/**/+page.md', { eager: true })
+
+export const routes = buildRouteRegistry({ tsModules, mdModules })
+```
+
+### 3. Wire into SvelteAI
+
+Pass `routes` and a `getPath` callback to `new SvelteAI(...)`. `getPath` is called on every `getContext()` invocation so the agent always sees the live current page:
+
+```ts
+// svelteai.ts
+import { page } from '$app/state'
+import { SvelteAI } from 'svelteai'
+import { routes } from '$lib/routes.js'
+
+export const svelteAI = new SvelteAI({
+  routes,
+  getPath: () => page.url.pathname,
+})
+```
+
+### 4. What the model sees
+
+[`getContext()`](svelteAI/src/lib/facade/SvelteAI.ts:76) prepends a "Current page" block and appends an "Available pages" list. The active route is starred:
+
+```
+Current page: /sverdle/crane
+  Sverdle round for a specific word
+  word = crane
+
+App state:
+  ...
+
+Available pages:
+  [0] / — Home
+  [1] /sverdle — Sverdle word game
+* [2] /sverdle/[word] — Sverdle round for a specific word  [params: word]
+  [3] /demo/local-context — Smart home thermostat demo
+```
+
+### 5. Navigation tools
+
+Add the navigation tools to your agent. Three tools are available — include whichever fits your agent's style:
+
+```ts
+tools: {
+  ...svelteAI.tools.lookupRoute,      // search pages by keyword
+  ...svelteAI.tools.navigateByUrl,    // model constructs full URL
+  ...svelteAI.tools.navigateByIndex,  // model picks index + params map; library resolves URL
+  ...svelteAI.tools.callAction,
+  ...svelteAI.tools.setState,
+  ...svelteAI.tools.lookupComponent,
+}
+```
+
+| Tool | Input | Behaviour |
+|---|---|---|
+| `lookupRoute` | `{ query }` | Keyword search over path, short, long — returns matching `RouteRecord[]` with index and param hints |
+| `navigateByUrl` | `{ path }` | Calls `goto(path)` — model supplies the fully resolved URL |
+| `navigateByIndex` | `{ index, params? }` | Library resolves `[param]` placeholders from the `params` map, then calls `goto()` — prevents malformed URLs |
+
+---
 
 ## Build setup
 
@@ -167,7 +288,7 @@ svelteAI/                        # The library (npm: svelteai)
 │       └── globalRegistry.ts    # Module-level AIRegistry singleton
 
 svelteAI-demo/                   # SvelteKit demo app
-└── src/routes/demo/full-context/
+└── src/routes/demo/local-context/
     ├── +page.svelte             # Two-panel layout: live demo + inline dev docs
     ├── ThermostatWidget.svelte  # @ai-annotated component
     ├── ChatPanel.svelte         # Chat UI
@@ -205,5 +326,5 @@ yarn dev          # starts svelteAI-demo at http://localhost:5173
 
 - [`Design/general_aim.md`](Design/general_aim.md) — goals and motivation
 - [`Implementation/plan.md`](Implementation/plan.md) — full implementation plan, module architecture, transform engine spec
-- [`Docs/how-to-full-context.md`](Docs/how-to-full-context.md) — full-context integration pattern with Vercel AI SDK
+- [`Docs/how-to-local-context.md`](Docs/how-to-local-context.md) — local-context integration pattern with Vercel AI SDK
 - [`Docs/how-to-context-digger.md`](Docs/how-to-context-digger.md) — lazy-loading pattern for larger apps
