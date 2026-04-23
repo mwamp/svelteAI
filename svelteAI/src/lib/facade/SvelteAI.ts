@@ -5,20 +5,45 @@ import type {
 	AIComponentTypeSnapshot,
 	AINodeSnapshot,
 	AISnapshot,
+	RouteRecord,
 } from '../registry/types.js'
 import { makeTools } from './tools.ts'
+import { matchRoute } from './routes.js'
+
+/**
+ * Formats an entry value for display in getContext() output.
+ * Strings are single-quoted. Objects/arrays are JSON-serialised.
+ * Primitives use String().
+ */
+function formatEntryValue(value: unknown): string {
+	if (typeof value === 'string') return `'${value}'`
+	if (value !== null && typeof value === 'object') {
+		try {
+			return JSON.stringify(value)
+		} catch {
+			return String(value)
+		}
+	}
+	return String(value)
+}
 
 export interface SvelteAIConfig {
-	// Reserved for future adapter configuration
+	routes?: RouteRecord[]
+	/** Returns the current URL pathname. Called on every getContext() invocation. */
+	getPath?: () => string
 }
 
 export class SvelteAI {
 	private _registry: AIRegistry
+	private _routes: RouteRecord[]
+	private _getPath: (() => string) | undefined
 
 	readonly tools: ReturnType<typeof makeTools>
 
-	constructor(_config?: SvelteAIConfig) {
+	constructor(config?: SvelteAIConfig) {
 		this._registry = __globalAIRegistry
+		this._routes = config?.routes ?? []
+		this._getPath = config?.getPath
 		this.tools = makeTools(this)
 	}
 
@@ -26,20 +51,55 @@ export class SvelteAI {
 
 	/**
 	 * Returns a formatted string suitable for injection into an LLM system
-	 * prompt. Lists all mounted component instances with their state values,
-	 * followed by global (root-level) state.
+	 * prompt. Includes:
+	 * - Current page block (if getPath + routes are configured)
+	 * - Component instance state
+	 * - Global state
+	 * - Available pages list (if routes are configured)
 	 *
 	 * Example output:
+	 *   Current page: /demo/full-context/thermostats
+	 *     Thermostat controls
+	 *
 	 *   App state:
 	 *
 	 *   [ThermostatWidget:a3f2]
 	 *     A thermostat control for a single room.
 	 *     room_name (r): 'bedroom'
 	 *     temperature (rw): 22
+	 *
+	 *   Available pages:
+	 *     [0] /demo/full-context — Smart home demo overview
+	 *   * [1] /demo/full-context/thermostats — Thermostat controls
+	 *     [2] /demo/full-context/energy — Energy consumption
 	 */
 	getContext(): string {
 		const snapshot = this._registry.getSnapshot()
-		const lines: string[] = ['App state:']
+		const lines: string[] = []
+
+		// ── Current page block ────────────────────────────────────────────────
+		if (this._getPath) {
+			const pathname = this._getPath()
+			const match = this._routes.length > 0 ? matchRoute(pathname, this._routes) : null
+
+			if (match) {
+				lines.push(`Current page: ${pathname}`)
+				lines.push(`  ${match.record.short}`)
+				if (match.record.long) lines.push(`  ${match.record.long}`)
+				const paramEntries = Object.entries(match.params)
+				if (paramEntries.length > 0) {
+					for (const [key, val] of paramEntries) {
+						lines.push(`  ${key} = ${val}`)
+					}
+				}
+			} else {
+				lines.push(`Current page: ${pathname}  [not in route registry]`)
+			}
+			lines.push('')
+		}
+
+		// ── App state ─────────────────────────────────────────────────────────
+		lines.push('App state:')
 
 		// Component instances (non-root nodes)
 		const nodes = this._registry.getNodes()
@@ -55,9 +115,9 @@ export class SvelteAI {
 				if (typeDesc) lines.push(`  ${typeDesc}`)
 
 				for (const entry of node.entries) {
-					const val = typeof entry.value === 'string' ? `'${entry.value}'` : String(entry.value)
-					lines.push(`  ${entry.name} (${entry.access}): ${val}`)
-				}
+						const val = formatEntryValue(entry.value)
+						lines.push(`  ${entry.name} (${entry.access}): ${val}`)
+					}
 				for (const action of node.actions) {
 					lines.push(`  ${action.name}() — ${action.description}`)
 				}
@@ -70,8 +130,27 @@ export class SvelteAI {
 			lines.push('')
 			lines.push('Global state:')
 			for (const entry of rootEntries) {
-				const val = typeof entry.value === 'string' ? `'${entry.value}'` : String(entry.value)
+				const val = formatEntryValue(entry.value)
 				lines.push(`  ${entry.name} (${entry.access}): ${val}`)
+			}
+		}
+
+		// ── Available pages ───────────────────────────────────────────────────
+		if (this._routes.length > 0) {
+			lines.push('')
+			lines.push('Available pages:')
+
+			const activePath = this._getPath ? this._getPath() : null
+			const activeMatch = activePath ? matchRoute(activePath, this._routes) : null
+			const activeIndex = activeMatch?.record.index ?? -1
+
+			for (const route of this._routes) {
+				const prefix = route.index === activeIndex ? '* ' : '  '
+				const paramHint =
+					route.params && Object.keys(route.params).length > 0
+						? `  [params: ${Object.keys(route.params).join(', ')}]`
+						: ''
+				lines.push(`${prefix}[${route.index}] ${route.path} — ${route.short}${paramHint}`)
 			}
 		}
 
@@ -115,6 +194,25 @@ export class SvelteAI {
 	/** Returns all registered component types. */
 	getComponentTypes(): AIComponentTypeSnapshot[] {
 		return this._registry.getComponentTypes()
+	}
+
+	/** Returns the registered route list. */
+	getRoutes(): RouteRecord[] {
+		return this._routes
+	}
+
+	/**
+	 * Case-insensitive substring search over path, short, and long.
+	 * Returns matching RouteRecord entries.
+	 */
+	lookupRoute(query: string): RouteRecord[] {
+		const q = query.toLowerCase()
+		return this._routes.filter(
+			(r) =>
+				r.path.toLowerCase().includes(q) ||
+				r.short.toLowerCase().includes(q) ||
+				(r.long?.toLowerCase().includes(q) ?? false),
+		)
 	}
 
 	// ── Write ─────────────────────────────────────────────────────────────────

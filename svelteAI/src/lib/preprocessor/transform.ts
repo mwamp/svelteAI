@@ -118,10 +118,27 @@ export function transformScriptBlock(
 }
 
 /**
+ * Returns true if the $state initialiser after the declaration is an object literal.
+ * Looks for `$state(` followed (ignoring whitespace) by `{`.
+ * Used to validate that rw module state uses an object shape.
+ */
+function isObjectStateInitialiser(source: string, declarationEnd: number): boolean {
+	const after = source.slice(declarationEnd)
+	const stateMatch = /\$state\s*\(/.exec(after)
+	if (!stateMatch) return false
+	const afterParen = after.slice(stateMatch.index + stateMatch[0].length).trimStart()
+	return afterParen.startsWith('{')
+}
+
+/**
  * Transforms a .svelte.ts or plain .ts file.
  * Module-level registration with SSR guard, no $effect.
  */
-export function transformModuleFile(content: string, _componentName: string): TransformResult {
+export function transformModuleFile(
+	content: string,
+	_componentName: string,
+	filename?: string,
+): TransformResult {
 	const decorators = parseDecorators(content)
 	if (decorators.length === 0) return { code: content, changed: false }
 
@@ -133,6 +150,19 @@ export function transformModuleFile(content: string, _componentName: string): Tr
 	for (const dec of sorted) {
 		if (dec.type === 'ai' && dec.name) {
 			const isReadOnly = dec.meta.access === 'r'
+
+			// Validate: rw module state must use an object shape
+			if (!isReadOnly && (dec.keyword === 'let' || dec.keyword === 'const')) {
+				if (!isObjectStateInitialiser(content, dec.end)) {
+					const file = filename ? ` in ${filename}` : ''
+					throw new Error(
+						`[svelteai]${file}: @ai({ access: 'rw' }) on '${dec.name}' — ` +
+							`module-level rw state must use an object shape.\n` +
+							`Svelte 5 forbids reassigning exported $state bindings.\n` +
+							`Fix: export let ${dec.name} = $state({ value: <your value> })`,
+					)
+				}
+			}
 			// Remove decorator line
 			const decoratorLineEnd =
 				dec.end -

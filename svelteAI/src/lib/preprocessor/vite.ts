@@ -21,7 +21,7 @@ export function svelteAIVitePlugin(): Plugin {
 			if (!id.endsWith('.svelte.ts')) return null
 
 			const componentName = componentNameFromFilename(id)
-			const result = transformModuleFile(code, componentName)
+			const result = transformModuleFile(code, componentName, id)
 			if (!result.changed) return null
 
 			return {

@@ -21,7 +21,7 @@ The decorator takes a flat object with these keys:
 | Key | Required | Values | Meaning |
 |---|---|---|---|
 | `description` | yes | string | Shown to the model as context |
-| `access` | no | `rw`, `r` | Read-write or read-only. Defaults to `r` for `$derived`, `rw` for `$state` |
+| `access` | no | `rw`, `r` | Read-write or read-only. Defaults to `r` — always specify `rw` explicitly for writable state |
 
 ## Annotating Components
 

@@ -1,8 +1,6 @@
-import { DirectChatTransport, ToolLoopAgent, tool, stepCountIs } from 'ai'
+import { DirectChatTransport, ToolLoopAgent, stepCountIs } from 'ai'
 import { Chat } from '@ai-sdk/svelte'
 import { createOpenAI } from '@ai-sdk/openai'
-import { goto } from '$app/navigation'
-import { z } from 'zod'
 import { svelteAI } from './svelteai.js'
 
 /**
@@ -11,23 +9,16 @@ import { svelteAI } from './svelteai.js'
  * Uses DirectChatTransport + ToolLoopAgent so the agent runs entirely
  * in-process — no server route needed.
  *
- * @param apiKey - OpenAI API key. Falls back to VITE_OPENAI_API_KEY env var
- *   so local dev with a .env file still works without typing the key.
+ * Navigation tools (navigateByUrl, navigateByIndex, lookupRoute) let the
+ * agent move between pages in the /demo/full-context route group.
  */
 export function createChat(apiKey: string): Chat {
 	const openai = createOpenAI({ apiKey })
 
 	const tools = {
-		navigate: tool({
-			description: 'Navigate to a different page in the app.',
-			inputSchema: z.object({
-				path: z.string().describe('The route path to navigate to.'),
-			}),
-			execute: async ({ path }) => {
-				await goto(path)
-				return { ok: true, path }
-			},
-		}),
+		...svelteAI.tools.lookupRoute,
+		...svelteAI.tools.navigateByUrl,
+		...svelteAI.tools.navigateByIndex,
 		...svelteAI.tools.callAction,
 		...svelteAI.tools.setState,
 		...svelteAI.tools.lookupComponent,
@@ -43,7 +34,7 @@ export function createChat(apiKey: string): Chat {
 				messages: [
 					{
 						role: 'system' as const,
-						content: `You are a smart home assistant. You can read and control the home's devices.
+						content: `You are a smart home assistant. You can read and control the home's devices and navigate between pages.
 
 Current app state:
 ${svelteAI.getContext()}`,

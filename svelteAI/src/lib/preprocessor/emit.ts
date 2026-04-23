@@ -125,7 +125,10 @@ export function emitModuleStateRegistration(
 		`\t\tgetValue: () => ${name},`,
 	]
 	if (!isReadOnly) {
-		lines.push(`\t\tsetValue: (v) => { ${name} = v as typeof ${name} },`)
+		// Module-level exported $state cannot be reassigned (Svelte 5 constraint).
+		// Mutate via Object.assign so the binding is never replaced.
+		// The developer must use an object shape for mutable module state.
+		lines.push(`\t\tsetValue: (v) => { Object.assign(${name}, v) },`)
 	}
 	lines.push(`\t})`)
 	lines.push(`}`)

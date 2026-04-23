@@ -87,3 +87,17 @@ export interface AIChangeEvent {
 	path: string
 	value?: unknown
 }
+
+// Route types
+export interface RouteParamSchema {
+	description: string
+	example?: string
+}
+
+export interface RouteRecord {
+	index: number
+	path: string
+	short: string
+	long?: string
+	params?: Record<string, RouteParamSchema>
+}

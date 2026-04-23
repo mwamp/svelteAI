@@ -4,6 +4,9 @@
 export { SvelteAI } from './facade/SvelteAI.ts'
 export type { SvelteAIConfig } from './facade/SvelteAI.ts'
 
+// Route registry helpers
+export { buildRouteRegistry, matchRoute, derivePath } from './facade/routes.js'
+
 // Registry types — for consumers who want to type their own code
 export type {
 	AIEntry,
@@ -19,6 +22,8 @@ export type {
 	AIEntrySnapshot,
 	AIActionSnapshot,
 	AIChangeEvent,
+	RouteRecord,
+	RouteParamSchema,
 } from './registry/types.js'
 
 // Preprocessor exports (Svelte preprocessor + Vite plugin)

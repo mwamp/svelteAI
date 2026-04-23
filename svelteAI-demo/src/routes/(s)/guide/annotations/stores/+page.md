@@ -9,11 +9,31 @@ Svelte 5 runes (`$state`, `$derived`) work in `.svelte.ts` files. Use the same `
 ```ts
 // src/lib/stores/energy.svelte.ts
 
-@ai({ access: 'rw', description: 'Total energy consumption in kWh today.' })
-export let energyToday = $state(0)
-
 @ai({ access: 'r', description: 'Current power draw in watts.' })
-export let powerDraw = $derived(energyToday * 1000)
+export let powerDraw = $state(1240)
+```
+
+### Read-write state must use an object shape
+
+Svelte 5 forbids reassigning an exported `$state` binding. Because SvelteAI needs to write back to `rw` state, it uses `Object.assign` — which only works on objects. **Any `@ai({ access: 'rw' })` declaration in a `.svelte.ts` file must initialise with an object literal `$state({...})`.**
+
+```ts
+// ✅ correct — object shape
+@ai({ access: 'rw', description: 'User preferences.' })
+export let prefs = $state({ theme: 'light', language: 'en' })
+
+// ❌ build error — primitive with rw
+@ai({ access: 'rw', description: 'Counter.' })
+export let count = $state(0)
+```
+
+The Vite plugin detects the invalid pattern at build time and throws a descriptive error pointing to the file and variable name.
+
+Read-only (`access: 'r'`) state can be a primitive — no write-back is needed.
+
+```ts
+@ai({ access: 'r', description: 'Current power draw in watts.' })
+export let powerDraw = $state(1240)  // ✅ primitive is fine for r
 ```
 
 Because `.svelte.ts` files are not processed by the Svelte preprocessor, the **Vite plugin** is required to apply the same transform:
