@@ -76,7 +76,7 @@ export const agent = new ToolLoopAgent({
   instructions: () => [
     'You are a smart home assistant. You can read and control the home\'s devices.',
     '',
-    svelteAI.getContext()
+    svelteAI.promptLocalContext()
   ].join('\n'),
 
   tools: {

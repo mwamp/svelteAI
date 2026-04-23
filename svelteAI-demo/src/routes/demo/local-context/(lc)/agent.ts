@@ -36,8 +36,7 @@ export function createChat(apiKey: string): Chat {
 						role: 'system' as const,
 						content: `You are a smart home assistant. You can read and control the home's devices and navigate between pages.
 
-Current app state:
-${svelteAI.getContext()}`,
+${svelteAI.promptLocalContext()}`,
 					},
 					...messages.filter((m: { role: string }) => m.role !== 'system'),
 				],

@@ -7,7 +7,7 @@ import { svelteAI } from './svelteai.js'
  * Creates a Chat instance for the Sverdle AI assistant.
  *
  * The agent uses the local-context pattern: game state is injected into the
- * system prompt on every turn via svelteAI.getContext().
+ * system prompt on every turn via svelteAI.promptComponentContext().
  *
  * Tools provided by the framework:
  *  - call_action: invokes enterGuess() on the SverdelGame component
@@ -55,7 +55,7 @@ To enter a guess, use the call_action tool with the path "SverdelGame:<id>.enter
 Look up the component id first using lookup_component if needed.
 
 Current game state:
-${svelteAI.getContext()}`,
+${svelteAI.promptComponentContext()}`,
 					},
 					...messages.filter((m: { role: string }) => m.role !== 'system'),
 				],

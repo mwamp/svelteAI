@@ -41,7 +41,7 @@ import { svelteAI } from 'svelteai'
 
 const agent = new ToolLoopAgent({
   model: openai('gpt-4o'),
-  instructions: () => `You are a helpful assistant.\n\n${svelteAI.getContext()}`,
+  instructions: () => `You are a helpful assistant.\n\n${svelteAI.promptLocalContext()}`,
   tools: {
     ...svelteAI.tools.callAction,
     ...svelteAI.tools.setState,

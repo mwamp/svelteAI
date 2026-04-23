@@ -11,7 +11,7 @@ import { makeTools } from './tools.ts'
 import { matchRoute } from './routes.js'
 
 /**
- * Formats an entry value for display in getContext() output.
+ * Formats an entry value for display in prompt output.
  * Strings are single-quoted. Objects/arrays are JSON-serialised.
  * Primitives use String().
  */
@@ -29,8 +29,22 @@ function formatEntryValue(value: unknown): string {
 
 export interface SvelteAIConfig {
 	routes?: RouteRecord[]
-	/** Returns the current URL pathname. Called on every getContext() invocation. */
+	/** Returns the current URL pathname. Called on every prompt invocation. */
 	getPath?: () => string
+}
+
+export interface PromptRouteMapOptions {
+	/**
+	 * When true, each route line is prefixed with its numeric index `[N]`.
+	 * Defaults to true.
+	 */
+	withIndex?: boolean
+	/**
+	 * When true, marks the currently active route with `*`.
+	 * Requires `getPath` to be configured on the SvelteAI instance.
+	 * Defaults to true.
+	 */
+	markActive?: boolean
 }
 
 export class SvelteAI {
@@ -47,59 +61,96 @@ export class SvelteAI {
 		this.tools = makeTools(this)
 	}
 
-	// ── Read ──────────────────────────────────────────────────────────────────
+	// ── Prompt builders ───────────────────────────────────────────────────────
 
 	/**
-	 * Returns a formatted string suitable for injection into an LLM system
-	 * prompt. Includes:
-	 * - Current page block (if getPath + routes are configured)
-	 * - Component instance state
-	 * - Global state
-	 * - Available pages list (if routes are configured)
+	 * Returns a formatted block describing the available pages (route map).
+	 *
+	 * Example output (withIndex: true, markActive: true):
+	 *   Available pages:
+	 *     [0] /demo/local-context — Smart home demo overview
+	 *   * [1] /demo/local-context/thermostats — Thermostat controls
+	 *     [2] /demo/local-context/energy — Energy consumption
+	 *
+	 * Returns an empty string when no routes are configured.
+	 */
+	promptRouteMap(options?: PromptRouteMapOptions): string {
+		if (this._routes.length === 0) return ''
+
+		const withIndex = options?.withIndex ?? true
+		const markActive = options?.markActive ?? true
+
+		const activePath = markActive && this._getPath ? this._getPath() : null
+		const activeMatch = activePath ? matchRoute(activePath, this._routes) : null
+		const activeIndex = activeMatch?.record.index ?? -1
+
+		const lines: string[] = ['Available pages:']
+		for (const route of this._routes) {
+			const active = markActive && route.index === activeIndex
+			const prefix = active ? '* ' : '  '
+			const indexPart = withIndex ? `[${route.index}] ` : ''
+			const paramHint =
+				route.params && Object.keys(route.params).length > 0
+					? `  [params: ${Object.keys(route.params).join(', ')}]`
+					: ''
+			lines.push(`${prefix}${indexPart}${route.path} — ${route.short}${paramHint}`)
+		}
+		return lines.join('\n')
+	}
+
+	/**
+	 * Returns a formatted block describing the current page.
+	 * Requires `getPath` (and ideally `routes`) to be configured.
 	 *
 	 * Example output:
 	 *   Current page: /demo/local-context/thermostats
 	 *     Thermostat controls
 	 *
+	 * Returns an empty string when `getPath` is not configured.
+	 */
+	promptCurrentPage(): string {
+		if (!this._getPath) return ''
+
+		const pathname = this._getPath()
+		const match = this._routes.length > 0 ? matchRoute(pathname, this._routes) : null
+		const lines: string[] = []
+
+		if (match) {
+			lines.push(`Current page: ${pathname}`)
+			lines.push(`  ${match.record.short}`)
+			if (match.record.long) lines.push(`  ${match.record.long}`)
+			const paramEntries = Object.entries(match.params)
+			if (paramEntries.length > 0) {
+				for (const [key, val] of paramEntries) {
+					lines.push(`  ${key} = ${val}`)
+				}
+			}
+		} else {
+			lines.push(`Current page: ${pathname}  [not in route registry]`)
+		}
+
+		return lines.join('\n')
+	}
+
+	/**
+	 * Returns a formatted block describing all currently mounted component
+	 * instances and their state, plus global (root-level) state.
+	 *
+	 * Example output:
 	 *   App state:
 	 *
 	 *   [ThermostatWidget:a3f2]
 	 *     A thermostat control for a single room.
 	 *     room_name (r): 'bedroom'
 	 *     temperature (rw): 22
+	 *     resetTemperature() — Resets the temperature to the room default.
 	 *
-	 *   Available pages:
-	 *     [0] /demo/local-context — Smart home demo overview
-	 *   * [1] /demo/local-context/thermostats — Thermostat controls
-	 *     [2] /demo/local-context/energy — Energy consumption
+	 *   Global state:
+	 *     energyToday (r): 14.2
 	 */
-	getContext(): string {
+	promptComponentContext(): string {
 		const snapshot = this._registry.getSnapshot()
-		const lines: string[] = []
-
-		// ── Current page block ────────────────────────────────────────────────
-		if (this._getPath) {
-			const pathname = this._getPath()
-			const match = this._routes.length > 0 ? matchRoute(pathname, this._routes) : null
-
-			if (match) {
-				lines.push(`Current page: ${pathname}`)
-				lines.push(`  ${match.record.short}`)
-				if (match.record.long) lines.push(`  ${match.record.long}`)
-				const paramEntries = Object.entries(match.params)
-				if (paramEntries.length > 0) {
-					for (const [key, val] of paramEntries) {
-						lines.push(`  ${key} = ${val}`)
-					}
-				}
-			} else {
-				lines.push(`Current page: ${pathname}  [not in route registry]`)
-			}
-			lines.push('')
-		}
-
-		// ── App state ─────────────────────────────────────────────────────────
-		lines.push('App state:')
+		const lines: string[] = ['App state:']
 
 		// Component instances (non-root nodes)
 		const nodes = this._registry.getNodes()
@@ -109,15 +160,14 @@ export class SvelteAI {
 				lines.push('')
 				lines.push(`[${node.id}]`)
 
-				// Component description from type catalogue
 				const typeName = node.name
 				const typeDesc = snapshot.componentTypes.find((t) => t.name === typeName)?.description
 				if (typeDesc) lines.push(`  ${typeDesc}`)
 
 				for (const entry of node.entries) {
-						const val = formatEntryValue(entry.value)
-						lines.push(`  ${entry.name} (${entry.access}): ${val}`)
-					}
+					const val = formatEntryValue(entry.value)
+					lines.push(`  ${entry.name} (${entry.access}): ${val}`)
+				}
 				for (const action of node.actions) {
 					lines.push(`  ${action.name}() — ${action.description}`)
 				}
@@ -135,26 +185,43 @@ export class SvelteAI {
 			}
 		}
 
-		// ── Available pages ───────────────────────────────────────────────────
-		if (this._routes.length > 0) {
-			lines.push('')
-			lines.push('Available pages:')
-
-			const activePath = this._getPath ? this._getPath() : null
-			const activeMatch = activePath ? matchRoute(activePath, this._routes) : null
-			const activeIndex = activeMatch?.record.index ?? -1
-
-			for (const route of this._routes) {
-				const prefix = route.index === activeIndex ? '* ' : '  '
-				const paramHint =
-					route.params && Object.keys(route.params).length > 0
-						? `  [params: ${Object.keys(route.params).join(', ')}]`
-						: ''
-				lines.push(`${prefix}[${route.index}] ${route.path} — ${route.short}${paramHint}`)
-			}
-		}
-
 		return lines.join('\n')
+	}
+
+	/**
+	 * Convenience helper that combines `promptCurrentPage`, `promptComponentContext`,
+	 * and `promptRouteMap` into a single string — the standard "local context"
+	 * prompt block.
+	 *
+	 * Equivalent to the former `getContext()` output. Sections that produce no
+	 * content (e.g. no routes configured) are omitted automatically.
+	 */
+	promptLocalContext(): string {
+		const parts: string[] = []
+
+		const currentPage = this.promptCurrentPage()
+		if (currentPage) parts.push(currentPage)
+
+		parts.push(this.promptComponentContext())
+
+		const routeMap = this.promptRouteMap()
+		if (routeMap) parts.push(routeMap)
+
+		return parts.join('\n\n')
+	}
+
+	// ── Read ──────────────────────────────────────────────────────────────────
+
+	/**
+	 * Returns a formatted string suitable for injection into an LLM system
+	 * prompt. Includes current page, component state, global state, and
+	 * available pages.
+	 *
+	 * @deprecated Use `promptLocalContext()` instead. This method is a thin
+	 * wrapper kept for backward compatibility.
+	 */
+	getContext(): string {
+		return this.promptLocalContext()
 	}
 
 	/**

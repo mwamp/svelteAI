@@ -14,17 +14,27 @@ This object wraps the global registry and exposes a clean API for agent code.
 
 ## Reading State
 
-### `getContext(): string`
+### Prompt builders
 
-Returns a formatted string describing all currently mounted components and their state. Inject this into a model's system prompt or user message:
+SvelteAI exposes composable prompt-builder methods that return plain strings ready to embed in a system prompt.
+
+| Method | Returns | Description |
+|---|---|---|
+| `promptLocalContext()` | `string` | All-in-one: current page + component state + route map |
+| `promptCurrentPage()` | `string` | Current page block only (requires `getPath`) |
+| `promptComponentContext()` | `string` | Mounted component instances + global state |
+| `promptRouteMap(options?)` | `string` | Available pages list (`withIndex`, `markActive` options) |
 
 ```ts
-const systemPrompt = `You are a helpful assistant.\n\n${svelteAI.getContext()}`
+const systemPrompt = `You are a helpful assistant.\n\n${svelteAI.promptLocalContext()}`
 ```
 
-Example output:
+Example output from `promptLocalContext()`:
 
 ```
+Current page: /demo/local-context/thermostats
+  Thermostat controls
+
 App state:
 
 [ThermostatWidget:a3f2]
@@ -35,7 +45,14 @@ App state:
 
 Global state:
   energyToday (r): 14.2
+
+Available pages:
+  [0] /demo/local-context — Smart home demo overview
+* [1] /demo/local-context/thermostats — Thermostat controls
+  [2] /demo/local-context/energy — Energy consumption
 ```
+
+See [Context Building](/guide/wire-up/context-building) for the full reference.
 
 ### `getState(): Record<string, unknown>`
 

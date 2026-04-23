@@ -2,7 +2,7 @@
 
 // Facade — user-facing class
 export { SvelteAI } from './facade/SvelteAI.ts'
-export type { SvelteAIConfig } from './facade/SvelteAI.ts'
+export type { SvelteAIConfig, PromptRouteMapOptions } from './facade/SvelteAI.ts'
 
 // Route registry helpers
 export { buildRouteRegistry, matchRoute, derivePath } from './facade/routes.js'

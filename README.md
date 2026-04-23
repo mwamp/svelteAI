@@ -16,12 +16,16 @@ SvelteAI runs a **Svelte preprocessor** (for `.svelte` files) and a **Vite plugi
 
 At runtime, a [`SvelteAI`](svelteAI/src/lib/facade/SvelteAI.ts) facade reads the registry and exposes:
 
-- `getContext()` — a formatted string for LLM system prompt injection
+- **Prompt builders** — composable string blocks for LLM system prompt injection:
+  - `promptLocalContext()` — all-in-one: current page + component state + route map
+  - `promptCurrentPage()` — current page block only
+  - `promptComponentContext()` — mounted component instances + global state
+  - `promptRouteMap(options?)` — available pages list
 - `getState()` / `getSnapshot()` — flat map or nested tree of current values
 - `setState()` / `callAction()` — write back to reactive state or invoke annotated functions
 - `tools` — ready-made [Vercel AI SDK](https://sdk.vercel.ai) `tool()` definitions (`callAction`, `setState`, `lookupComponent`)
 
-The model always sees live values — `getContext()` is called on every turn, not cached.
+Prompt builders are called on every turn, not cached — the model always sees live values.
 
 ## Annotation syntax
 
@@ -63,7 +67,7 @@ export let total_watts = $state(1240)
 
 ## What the model sees
 
-`svelteAI.getContext()` produces a formatted block injected into the system prompt:
+`svelteAI.promptLocalContext()` produces a formatted block injected into the system prompt:
 
 ```
 App state:
@@ -119,7 +123,7 @@ export const agent = new ToolLoopAgent({
     messages: [
       {
         role: 'system',
-        content: `You are a smart home assistant.\n\n${svelteAI.getContext()}`,
+        content: `You are a smart home assistant.\n\n${svelteAI.promptLocalContext()}`,
       },
       ...messages.filter((m) => m.role !== 'system'),
     ],
@@ -184,7 +188,7 @@ export const routes = buildRouteRegistry({ tsModules, mdModules })
 
 ### 3. Wire into SvelteAI
 
-Pass `routes` and a `getPath` callback to `new SvelteAI(...)`. `getPath` is called on every `getContext()` invocation so the agent always sees the live current page:
+Pass `routes` and a `getPath` callback to `new SvelteAI(...)`. `getPath` is called on every prompt-builder invocation so the agent always sees the live current page:
 
 ```ts
 // svelteai.ts
@@ -200,7 +204,7 @@ export const svelteAI = new SvelteAI({
 
 ### 4. What the model sees
 
-[`getContext()`](svelteAI/src/lib/facade/SvelteAI.ts:76) prepends a "Current page" block and appends an "Available pages" list. The active route is starred:
+[`promptLocalContext()`](svelteAI/src/lib/facade/SvelteAI.ts:183) combines a "Current page" block, component state, and an "Available pages" list. The active route is starred:
 
 ```
 Current page: /sverdle/crane

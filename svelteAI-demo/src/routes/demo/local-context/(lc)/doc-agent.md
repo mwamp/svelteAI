@@ -1,7 +1,6 @@
 ### 2. Wire up the agent
 
-Pass `svelteAI.getContext()` into the system prompt.
-Use `svelteAI.tools` for ready-made tool definitions.
+Use `svelteAI.promptLocalContext()` to build the system prompt, and `svelteAI.tools` for ready-made tool definitions.
 
 ```ts
 const agent = new ToolLoopAgent({
@@ -13,7 +12,7 @@ const agent = new ToolLoopAgent({
   },
   prepareStep: async ({ messages }) => ({
     messages: [
-      { role: 'system', content: svelteAI.getContext() },
+      { role: 'system', content: svelteAI.promptLocalContext() },
       ...messages.filter(m => m.role !== 'system')
     ]
   })

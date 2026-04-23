@@ -1,22 +1,33 @@
 # Context Building
 
-Context building is how you describe the current app state to the AI model. SvelteAI provides several methods on the `svelteAI` facade to read the registry and format it for model consumption.
+Context building is how you describe the current app state to the AI model. SvelteAI exposes a set of **prompt-builder** methods on the `svelteAI` facade so you can compose exactly the context your agent needs.
 
-## `getContext(): string`
+## Prompt builders
 
-The primary method for local-context integrations. Returns a formatted string describing all currently mounted components and their state — ready to inject into a system prompt.
+Each method returns a plain string ready to embed in a system prompt. Call them inside `prepareStep` (or an `instructions` function) so the model always sees the current state on every turn.
+
+### `promptLocalContext()`
+
+The all-in-one helper for local-context integrations. Combines current page, component state, and route map into a single block. This is the recommended starting point.
 
 ```ts
-const systemPrompt = `
-You are a smart home assistant.
-
-${svelteAI.getContext()}
-`.trim()
+prepareStep: async ({ messages }) => ({
+  messages: [
+    {
+      role: 'system',
+      content: `You are a smart home assistant.\n\n${svelteAI.promptLocalContext()}`,
+    },
+    ...messages.filter(m => m.role !== 'system'),
+  ],
+})
 ```
 
 Example output:
 
 ```
+Current page: /demo/local-context/thermostats
+  Thermostat controls
+
 App state:
 
 [ThermostatWidget:a3f2]
@@ -27,55 +38,90 @@ App state:
 
 Global state:
   energyToday (r): 14.2
+
+Available pages:
+  [0] /demo/local-context — Smart home demo overview
+* [1] /demo/local-context/thermostats — Thermostat controls
+  [2] /demo/local-context/energy — Energy consumption
 ```
 
-Call `getContext()` inside the `instructions` function (not at construction time) so the model always sees the current state on every turn:
+### `promptCurrentPage()`
+
+Formats only the current page block. Requires `getPath` (and ideally `routes`) to be configured on the instance. Returns an empty string when `getPath` is absent.
 
 ```ts
-const agent = new ToolLoopAgent({
-  instructions: () => `You are an assistant.\n\n${svelteAI.getContext()}`
-})
+const pageBlock = svelteAI.promptCurrentPage()
+// Current page: /demo/local-context/thermostats
+//   Thermostat controls
 ```
 
-## `getState(): Record<string, unknown>`
+### `promptComponentContext()`
 
-Flat map of all state entries keyed by dotted path. Useful when you want to inject state as structured data rather than prose:
+Formats all currently mounted component instances and their state, plus global (root-level) state. Independent of routing — works even without `routes` or `getPath`.
 
 ```ts
-const state = svelteAI.getState()
-// {
-//   'ThermostatWidget:a3f2.room_name': 'bedroom',
-//   'ThermostatWidget:a3f2.temperature': 22,
-//   'energyToday': 14.2
-// }
+const stateBlock = svelteAI.promptComponentContext()
+// App state:
+//
+// [ThermostatWidget:a3f2]
+//   room_name (r): 'bedroom'
+//   temperature (rw): 22
+//
+// Global state:
+//   energyToday (r): 14.2
 ```
 
-## `getComponentTypes(): AIComponentTypeSnapshot[]`
+### `promptRouteMap(options?)`
 
-Returns all component types registered at module load time — independent of what is currently mounted. Use this for the [Digging Context](/guide/recipes/digging-context) pattern where the model gets an overview first:
+Formats the available pages list. Accepts an optional options object:
+
+| Option | Default | Description |
+|---|---|---|
+| `withIndex` | `true` | Prefix each line with `[N]` numeric index |
+| `markActive` | `true` | Mark the current route with `*` |
 
 ```ts
-const types = svelteAI.getComponentTypes()
-const overview = types.map(t => `- ${t.name}: ${t.description}`).join('\n')
+// Full map with index and active marker (default)
+svelteAI.promptRouteMap()
+
+// Plain list without index numbers
+svelteAI.promptRouteMap({ withIndex: false })
+
+// Index only, no active marker (e.g. for a non-navigating agent)
+svelteAI.promptRouteMap({ markActive: false })
 ```
 
-## `getSnapshot(): AISnapshot`
+Returns an empty string when no routes are configured.
 
-Full nested tree snapshot with resolved values. Use when you need the component hierarchy for custom serialization:
+## Composing a custom prompt
+
+Because each builder returns a plain string, you can mix and match freely:
 
 ```ts
-const snapshot = svelteAI.getSnapshot()
-// {
-//   componentTypes: [...],
-//   tree: { id, name, entries, actions, children }
-// }
+const systemPrompt = [
+  'You are a smart home assistant.',
+  svelteAI.promptCurrentPage(),
+  svelteAI.promptComponentContext(),
+  // Omit the route map for agents that cannot navigate
+].filter(Boolean).join('\n\n')
 ```
 
-## Choosing a Strategy
+## Lower-level accessors
+
+When you need structured data rather than prose, use the raw accessors:
+
+| Method | Returns | Use when |
+|---|---|---|
+| `getState()` | `Record<string, unknown>` | Custom serialization, structured tool input |
+| `getSnapshot()` | `AISnapshot` | Full tree, custom adapters, debugging |
+| `getComponentTypes()` | `AIComponentTypeSnapshot[]` | [Digging Context](/guide/recipes/digging-context) pattern |
+| `getNodes()` | `AINodeSnapshot[]` | Filtering / inspecting specific instances |
+
+## Choosing a strategy
 
 | Strategy | Method | Best for |
 |---|---|---|
-| Local context | `getContext()` | Small apps, full state fits in prompt |
-| Component overview | `getComponentTypes()` | Dense apps, lazy lookup |
+| Local context (all-in-one) | `promptLocalContext()` | Small apps, full state fits in prompt |
+| Custom composition | `promptCurrentPage` + `promptComponentContext` + `promptRouteMap` | Fine-grained control over what the model sees |
 | Flat state map | `getState()` | Custom serialization |
 | Full tree | `getSnapshot()` | Custom adapters, debugging |
