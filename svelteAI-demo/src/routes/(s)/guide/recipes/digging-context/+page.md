@@ -114,4 +114,4 @@ The other four components were never fetched.
 - When you want the model to reason about *which* component to interact with before acting
 - Token-sensitive integrations where context cost matters
 
-For simple apps, see [Full Context](/guide/recipes/full-context). For multi-page apps, see [Workflow Based](/guide/recipes/workflow-based).
+For simple apps, see [Local context](/guide/recipes/local-context). For multi-page apps, see [Workflow Based](/guide/recipes/workflow-based).

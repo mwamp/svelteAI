@@ -139,4 +139,4 @@ The model never loaded trip management or analytics state.
 - When you want the model to mirror how a human user navigates the app
 
 For single-page apps with many components, see [Digging Context](/guide/recipes/digging-context).
-For simple apps, see [Full Context](/guide/recipes/full-context).
+For simple apps, see [Local context](/guide/recipes/local-context).

@@ -1,4 +1,4 @@
-# Recipe: Full Context
+# Recipe: Local context
 
 **Use case:** A focused app with a small number of components. The model receives the complete app state on every turn — no lazy loading, no lookup tools. Simple and effective for apps where the total context fits comfortably in a system prompt.
 

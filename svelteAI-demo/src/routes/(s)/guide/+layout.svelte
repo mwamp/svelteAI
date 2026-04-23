@@ -38,7 +38,7 @@
 		{
 			label: 'Recipes',
 			items: [
-				{ label: 'Full Context', href: '/guide/recipes/full-context' },
+				{ label: 'Local context', href: '/guide/recipes/local-context' },
 				{ label: 'Digging Context', href: '/guide/recipes/digging-context' },
 				{ label: 'Workflow Based', href: '/guide/recipes/workflow-based' }
 			]

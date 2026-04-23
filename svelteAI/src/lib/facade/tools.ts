@@ -106,7 +106,7 @@ export function makeTools(svelteAI: SvelteAI) {
 					path: z
 						.string()
 						.describe(
-							'Fully resolved URL path with no placeholders, e.g. "/demo/full-context/thermostats" or "/sverdle/crane"',
+							'Fully resolved URL path with no placeholders, e.g. "/demo/local-context/thermostats" or "/sverdle/crane"',
 						),
 				}),
 				execute: async ({ path }) => {

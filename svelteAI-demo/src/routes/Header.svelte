@@ -26,8 +26,8 @@
 			<li aria-current={page.url.pathname.startsWith('/sverdle') ? 'page' : undefined}>
 					<a href={resolve('/sverdle')}>Sverdle</a>
 				</li>
-				<li aria-current={page.url.pathname.startsWith('/demo/full-context') ? 'page' : undefined}>
-					<a href={resolve('/demo/full-context')}>Simple SvelteAI</a>
+				<li aria-current={page.url.pathname.startsWith('/demo/local-context') ? 'page' : undefined}>
+					<a href={resolve('/demo/local-context')}>Simple SvelteAI</a>
 				</li>
 		</ul>
 		<svg viewBox="0 0 2 3" aria-hidden="true">

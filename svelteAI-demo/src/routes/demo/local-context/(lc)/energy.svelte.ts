@@ -1,5 +1,5 @@
 /**
- * Shared energy state for the full-context demo.
+ * Shared energy state for the local-context demo.
  *
  * Annotated with @ai so the model can read current energy consumption.
  * The svelteAIVitePlugin() transforms these @ai decorators into

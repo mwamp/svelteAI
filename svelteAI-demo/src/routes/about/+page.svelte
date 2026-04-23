@@ -109,7 +109,7 @@
 
 	<!-- CTA -->
 	<section class="cta">
-		<a href={resolve('/demo/full-context')} class="btn">See the live demo →</a>
+		<a href={resolve('/demo/local-context')} class="btn">See the live demo →</a>
 	</section>
 </div>
 

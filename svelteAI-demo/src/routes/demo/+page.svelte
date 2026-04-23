@@ -6,8 +6,8 @@
 	<h1>SvelteAI Demos</h1>
 	<ul>
 		<li>
-			<a href={resolve('/demo/full-context')}>
-				<strong>Full Context</strong> — AI assistant reads annotated state, adjusts thermostats, and navigates between pages via tool calls
+			<a href={resolve('/demo/local-context')}>
+				<strong>Local context</strong> — AI assistant reads annotated state, adjusts thermostats, and navigates between pages via tool calls
 			</a>
 		</li>
 		<li>

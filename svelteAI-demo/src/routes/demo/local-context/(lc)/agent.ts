@@ -4,13 +4,13 @@ import { createOpenAI } from '@ai-sdk/openai'
 import { svelteAI } from './svelteai.js'
 
 /**
- * Creates a new Chat instance for the full-context demo.
+ * Creates a new Chat instance for the local-context demo.
  *
  * Uses DirectChatTransport + ToolLoopAgent so the agent runs entirely
  * in-process — no server route needed.
  *
  * Navigation tools (navigateByUrl, navigateByIndex, lookupRoute) let the
- * agent move between pages in the /demo/full-context route group.
+ * agent move between pages in the /demo/local-context route group.
  */
 export function createChat(apiKey: string): Chat {
 	const openai = createOpenAI({ apiKey })

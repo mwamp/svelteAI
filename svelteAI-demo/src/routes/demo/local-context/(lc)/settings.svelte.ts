@@ -1,5 +1,5 @@
 /**
- * Shared settings state for the full-context demo.
+ * Shared settings state for the local-context demo.
  * Annotated with @ai so the model can read and update preferences.
  */
 // @ts-nocheck

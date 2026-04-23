@@ -58,7 +58,7 @@ export class SvelteAI {
 	 * - Available pages list (if routes are configured)
 	 *
 	 * Example output:
-	 *   Current page: /demo/full-context/thermostats
+	 *   Current page: /demo/local-context/thermostats
 	 *     Thermostat controls
 	 *
 	 *   App state:
@@ -69,9 +69,9 @@ export class SvelteAI {
 	 *     temperature (rw): 22
 	 *
 	 *   Available pages:
-	 *     [0] /demo/full-context — Smart home demo overview
-	 *   * [1] /demo/full-context/thermostats — Thermostat controls
-	 *     [2] /demo/full-context/energy — Energy consumption
+	 *     [0] /demo/local-context — Smart home demo overview
+	 *   * [1] /demo/local-context/thermostats — Thermostat controls
+	 *     [2] /demo/local-context/energy — Energy consumption
 	 */
 	getContext(): string {
 		const snapshot = this._registry.getSnapshot()

@@ -4,7 +4,7 @@ Context building is how you describe the current app state to the AI model. Svel
 
 ## `getContext(): string`
 
-The primary method for full-context integrations. Returns a formatted string describing all currently mounted components and their state — ready to inject into a system prompt.
+The primary method for local-context integrations. Returns a formatted string describing all currently mounted components and their state — ready to inject into a system prompt.
 
 ```ts
 const systemPrompt = `
@@ -75,7 +75,7 @@ const snapshot = svelteAI.getSnapshot()
 
 | Strategy | Method | Best for |
 |---|---|---|
-| Full context | `getContext()` | Small apps, full state fits in prompt |
+| Local context | `getContext()` | Small apps, full state fits in prompt |
 | Component overview | `getComponentTypes()` | Dense apps, lazy lookup |
 | Flat state map | `getState()` | Custom serialization |
 | Full tree | `getSnapshot()` | Custom adapters, debugging |

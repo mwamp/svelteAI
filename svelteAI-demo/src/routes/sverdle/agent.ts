@@ -6,7 +6,7 @@ import { svelteAI } from './svelteai.js'
 /**
  * Creates a Chat instance for the Sverdle AI assistant.
  *
- * The agent uses the full-context pattern: game state is injected into the
+ * The agent uses the local-context pattern: game state is injected into the
  * system prompt on every turn via svelteAI.getContext().
  *
  * Tools provided by the framework:

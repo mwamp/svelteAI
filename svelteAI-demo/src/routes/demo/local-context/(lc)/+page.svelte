@@ -5,25 +5,25 @@
 <div class="overview">
 	<h2>Smart Home Demo</h2>
 	<p>
-		This demo shows the <strong>full-context pattern</strong>: the AI assistant reads all annotated
+		This demo shows the <strong>local-context pattern</strong>: the AI assistant reads all annotated
 		component state and can navigate between pages using route-aware tools.
 	</p>
 
 	<ul class="page-list">
 		<li>
-			<a href="{base}/demo/full-context/thermostats">
+			<a href="{base}/demo/local-context/thermostats">
 				<strong>Thermostats</strong>
 				<span>Read and adjust room temperatures. The agent can set values and reset to defaults.</span>
 			</a>
 		</li>
 		<li>
-			<a href="{base}/demo/full-context/energy">
+			<a href="{base}/demo/local-context/energy">
 				<strong>Energy</strong>
 				<span>View current energy consumption and peak usage today.</span>
 			</a>
 		</li>
 		<li>
-			<a href="{base}/demo/full-context/settings">
+			<a href="{base}/demo/local-context/settings">
 				<strong>Settings</strong>
 				<span>Configure temperature units and alert thresholds.</span>
 			</a>

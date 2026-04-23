@@ -45,17 +45,17 @@
 	}
 
 	const navLinks = [
-		{ href: `${base}/demo/full-context`, label: 'Overview' },
-		{ href: `${base}/demo/full-context/thermostats`, label: 'Thermostats' },
-		{ href: `${base}/demo/full-context/energy`, label: 'Energy' },
-		{ href: `${base}/demo/full-context/settings`, label: 'Settings' },
+		{ href: `${base}/demo/local-context`, label: 'Overview' },
+		{ href: `${base}/demo/local-context/thermostats`, label: 'Thermostats' },
+		{ href: `${base}/demo/local-context/energy`, label: 'Energy' },
+		{ href: `${base}/demo/local-context/settings`, label: 'Settings' },
 	]
 </script>
 
 <div class="fc-layout">
 	<header class="fc-header">
 		<a href="{base}/demo" class="back-link">← Demo index</a>
-		<h1>Full Context Demo</h1>
+		<h1>Local context Demo</h1>
 		<p class="subtitle">
 			AI assistant reads annotated state and can navigate between pages via tool calls.
 		</p>
