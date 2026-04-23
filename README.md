@@ -10,6 +10,25 @@ Agents can browse the web autonomously, but deep app integration gives you:
 - **Accuracy at lower cost** — one tool call can trigger a complex, pre-validated action instead of fragile DOM manipulation
 - **Better UX** — the model reads live reactive state, not a stale screenshot
 
+## What is SvelteAI (connector)
+
+SvelteAI sits between your Svelte app and any AI framework: it turns annotated reactive state into prompt context and ready-made tools, while remaining agnostic to which model provider or SDK you use.
+```mermaid
+graph TD
+    App["🖥️ **Svelte App**<br>(components, state, actions)"]
+    SvelteAI["⚙️ **SvelteAI**<br>(registry, prompt builders, tools)"]
+    AIFramework["🔗 AI Framework<br>(Vercel AI SDK / aibind)"]
+    Provider["🤖 Model Provider<br>(OpenAI / Anthropic / Ollama …)"]
+    LLM["🧠 LLM"]
+
+    App -->|"@ai annotations<br>→ live registry"| SvelteAI
+    SvelteAI -->|"prompt context<br>+ tool definitions"| AIFramework
+    AIFramework -->|"model call"| Provider
+    Provider --> LLM
+    LLM -->|"tool calls<br>(setState / callAction / navigate)"| SvelteAI
+    SvelteAI -->|"writes reactive state<br>invokes actions"| App
+```
+
 ## How it works
 
 SvelteAI runs a **Svelte preprocessor** (for `.svelte` files) and a **Vite plugin** (for `.svelte.ts` shared state). Both scan for `@ai` and `@component` decorator annotations and emit `$effect` registration blocks that wire your reactive state and functions into a live registry tree.
@@ -26,6 +45,19 @@ At runtime, a [`SvelteAI`](svelteAI/src/lib/facade/SvelteAI.ts) facade reads the
 - `tools` — ready-made [Vercel AI SDK](https://sdk.vercel.ai) `tool()` definitions (`callAction`, `setState`, `lookupComponent`)
 
 Prompt builders are called on every turn, not cached — the model always sees live values.
+
+## Currently Unsolved
+
+| Tool | level | Behaviour |
+|---|---|---|
+| No type for object state writes | High | The model could theoretically assign new attributes in a state object (useless). |
+| No type for action calls | High | A proper zod or otherwise typing can clarify flows and prevent model errors |
+| VSCode checks | Medium / High | Annotations (decorators) trigger IDE syntax check errors |
+| AdHoc solution for routes | Medium | Creating route manifest requires boilerplate (`import.meta.glob`). |
+| Limitation on state writes | Medium | Currently caught by preprocessor. Svelte prevents state re-assignment in foreign files. Use objects instead (consistent with svelte doc but abstract) |
+| Explicit connectors for Vercel AI and others | Low | Simple to do |
+
+
 
 ## Annotation syntax
 
@@ -114,7 +146,7 @@ export const agent = new ToolLoopAgent({
   tools: {
     ...svelteAI.tools.lookupRoute,
     ...svelteAI.tools.navigateByUrl,
-    ...svelteAI.tools.navigateByIndex,
+    // alternatively ...svelteAI.tools.navigateByIndex,
     ...svelteAI.tools.callAction,
     ...svelteAI.tools.setState,
     ...svelteAI.tools.lookupComponent,
